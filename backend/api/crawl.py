@@ -50,11 +50,13 @@ def run_once(req: CrawlRunOnceRequest, request: Request):
 @router.get("/status")
 def crawl_status(request: Request):
     scheduler = request.app.state.scheduler
+    job = scheduler.scheduler.get_job("news_crawl") if hasattr(scheduler, 'scheduler') else None
     return {
         "is_running": scheduler.is_running,
-        "crawling_active": hasattr(scheduler, 'scheduler') and scheduler.scheduler.get_job("news_crawl") is not None,
+        "crawling_active": job is not None,
         "last_run": scheduler.last_run.isoformat() if scheduler.last_run else None,
         "last_error": scheduler.last_error,
         "new_count": scheduler.new_count,
         "total_count": scheduler.total_count,
+        "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,
     }

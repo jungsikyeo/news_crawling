@@ -3,6 +3,7 @@ import ReactECharts from "echarts-for-react"
 import { Download, BarChart2, Hash, Globe, Building2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { fetchStats, exportCsv } from "@/hooks/useApi"
 import type { StatsFilter } from "@/hooks/useApi"
 
@@ -42,14 +43,21 @@ function getCssVar(name: string) {
   return val ? `hsl(${val})` : undefined
 }
 
+function formatLocalDate(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
 function daysAgo(n: number) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return formatLocalDate(d)
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return formatLocalDate(new Date())
 }
 
 const PRESETS = [
@@ -75,7 +83,7 @@ export function Analytics() {
   const [debouncedKeyword, setDebouncedKeyword] = useState("")
   const [filterPortal, setFilterPortal] = useState("")
   const [activePreset, setActivePreset] = useState("최근 7일")
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null)
 
   useEffect(() => {
     function update() {
@@ -389,16 +397,17 @@ export function Analytics() {
           className="h-7 text-xs bg-secondary border-border w-[120px]"
         />
 
-        <select
-          value={filterPortal}
-          onChange={(e) => setFilterPortal(e.target.value)}
-          className="h-7 rounded-md border border-border bg-secondary px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">전체 포털</option>
-          <option value="naver">네이버</option>
-          <option value="daum">다음</option>
-          <option value="nate">네이트</option>
-        </select>
+        <Select value={filterPortal || "all"} onValueChange={(v) => setFilterPortal(v === "all" ? "" : v)}>
+          <SelectTrigger className="h-7 text-xs w-[110px]">
+            <SelectValue placeholder="전체 포털" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 포털</SelectItem>
+            <SelectItem value="naver">네이버</SelectItem>
+            <SelectItem value="daum">다음</SelectItem>
+            <SelectItem value="nate">네이트</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Metric cards */}

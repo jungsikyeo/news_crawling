@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { MutableRefObject } from "react"
 import { ExternalLink, Newspaper, Search, Star } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { fetchNews, toggleScrap, fetchScrapIds } from "@/hooks/useApi"
 import { highlightText } from "@/lib/highlight"
@@ -158,16 +159,17 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           className="h-8 text-sm bg-secondary border-border w-[140px]"
         />
-        <select
-          value={portal}
-          onChange={(e) => setPortal(e.target.value)}
-          className="h-8 rounded-md border border-border bg-secondary px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">전체 포털</option>
-          <option value="naver">네이버</option>
-          <option value="daum">다음</option>
-          <option value="nate">네이트</option>
-        </select>
+        <Select value={portal} onValueChange={(v) => setPortal(v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 text-sm w-[110px]">
+            <SelectValue placeholder="전체 포털" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체 포털</SelectItem>
+            <SelectItem value="naver">네이버</SelectItem>
+            <SelectItem value="daum">다음</SelectItem>
+            <SelectItem value="nate">네이트</SelectItem>
+          </SelectContent>
+        </Select>
         <Input
           type="date"
           value={dateFrom}

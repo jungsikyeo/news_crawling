@@ -19,6 +19,7 @@ import time
 import threading
 import webbrowser
 import urllib.request
+import urllib.error
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -26,16 +27,32 @@ URL = f"http://{HOST}:{PORT}"
 
 
 def _run_server():
-    import uvicorn
-    from main import app  # backend/main.py (BACKEND_DIR이 sys.path에 있음)
-    uvicorn.run(app, host=HOST, port=PORT, log_level="error")
+    try:
+        import uvicorn
+        from main import app  # backend/main.py (BACKEND_DIR이 sys.path에 있음)
+        uvicorn.run(app, host=HOST, port=PORT, log_level="error")
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        print(f"서버 오류: {e}")
+        print(err_msg)
+        # frozen 환경에서 stdout이 안 보일 수 있으므로 파일에도 기록
+        try:
+            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "error.log")
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(err_msg)
+        except Exception:
+            pass
 
 
 def _wait_for_server(timeout: int = 30) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            urllib.request.urlopen(f"{URL}/api/news/list?limit=1", timeout=1)
+            urllib.request.urlopen(f"{URL}/api/crawl/status", timeout=1)
+            return True
+        except urllib.error.HTTPError:
+            # 서버가 응답했지만 HTTP 에러 (예: 404/405) → 서버는 살아있음
             return True
         except Exception:
             time.sleep(0.3)

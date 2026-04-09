@@ -31,7 +31,7 @@ def build_exe():
     frontend_dist = os.path.join(ROOT, "frontend", "dist")
     assets_dir = os.path.join(ROOT, "assets")
     backend_dir = os.path.join(ROOT, "backend")
-    launcher = os.path.join(ROOT, "launcher.py")
+    launcher = os.path.join(ROOT, "server_entry.py")
 
     print("=" * 40)
     print("[2/2] exe 빌드 중...")
@@ -55,6 +55,7 @@ def build_exe():
         "--hidden-import", "apscheduler.triggers.interval",
         "--hidden-import", "lxml",
         "--hidden-import", "bs4",
+        "--hidden-import", "requests",
         "--hidden-import", "main",          # backend/main.py
         "--hidden-import", "scheduler",     # backend/scheduler.py
         "--hidden-import", "db.database",   # backend/db/database.py
@@ -71,15 +72,37 @@ def build_exe():
         "--collect-all", "starlette",
         "--noconfirm",
         "--clean",
+        "--noconsole",
         launcher,
     ]
 
     subprocess.run(cmd, check=True)
     print("=" * 40)
-    print("빌드 완료!")
+    print("백엔드 빌드 완료!")
     print(f"  -> dist/NewsDesk/NewsDesk.exe")
+
+
+def build_electron():
+    electron_dir = os.path.join(ROOT, "electron")
+    print("=" * 40)
+    print("[3/3] Electron 빌드 중...")
+    subprocess.run(
+        ["npm", "install"],
+        cwd=electron_dir,
+        check=True,
+        shell=(sys.platform == "win32"),
+    )
+    subprocess.run(
+        ["npm", "run", "dist"],
+        cwd=electron_dir,
+        check=True,
+        shell=(sys.platform == "win32"),
+    )
+    print("Electron 빌드 완료!")
+    print(f"  -> dist-electron/")
 
 
 if __name__ == "__main__":
     build_frontend()
     build_exe()
+    build_electron()

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Plus, X, Play, Square, Zap, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import naverImg from "@/assets/naver.jpg"
 import daumImg from "@/assets/daum.jpeg"
@@ -198,17 +199,18 @@ export function Sidebar({ status, onStartCrawl, onStopCrawl, onRunOnce, onWarnin
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
             수집 간격
           </p>
-          <select
-            value={interval}
-            onChange={(e) => setInterval(Number(e.target.value))}
-            className="w-full h-8 rounded-md border border-border bg-secondary px-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            {INTERVALS.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select value={String(interval)} onValueChange={(v) => setInterval(Number(v))}>
+            <SelectTrigger className="w-full h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {INTERVALS.map(({ value, label }) => (
+                <SelectItem key={value} value={String(value)}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </section>
 
         {/* Actions */}

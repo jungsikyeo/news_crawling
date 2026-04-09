@@ -291,6 +291,11 @@ button, [role="button"], select, a, input[type="checkbox"], input[type="radio"],
   cursor: pointer;
 }
 
+/* ── Radix Select dropdown ─────────────────────────── */
+[data-select-item][data-highlighted] {
+  background-color: hsl(var(--secondary));
+}
+
 
 body {
   margin: 0;
