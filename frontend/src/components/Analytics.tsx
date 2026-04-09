@@ -296,13 +296,14 @@ export function Analytics() {
     }],
   }
 
+  const articleHourlyMap = Object.fromEntries(s.articleHourly.map((h) => [String(h.hour).padStart(2, "0"), h.count]))
   const articleHourlyOption = {
     backgroundColor: "transparent",
     tooltip: { trigger: "axis" as const, ...tooltipStyle },
     grid: { left: "3%", right: "3%", bottom: "3%", top: "3%", containLabel: true },
     xAxis: {
       type: "category" as const,
-      data: s.articleHourly.map((h) => `${h.hour}시`),
+      data: allHours.map((h) => `${h}시`),
       axisLine: { lineStyle: { color: gridColor } },
       axisLabel: { color: textColor, fontSize: 11 },
       splitLine: { lineStyle: { color: gridColor } },
@@ -315,9 +316,14 @@ export function Analytics() {
     color: ["#f59e0b"],
     series: [{
       name: "기사수",
-      type: "bar" as const,
-      data: s.articleHourly.map((h) => h.count),
-      itemStyle: { borderRadius: [4, 4, 0, 0], opacity: 0.85 },
+      type: "line" as const,
+      smooth: true,
+      areaStyle: { opacity: 0.15 },
+      data: allHours.map((h) => articleHourlyMap[h] ?? 0),
+      lineStyle: { width: 2 },
+      symbol: "circle",
+      symbolSize: 4,
+      showSymbol: false,
     }],
   }
 
