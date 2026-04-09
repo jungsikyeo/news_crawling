@@ -7,6 +7,5 @@
 
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
-| #284 | 9:13 PM | ✅ | Updated text highlighting colors to fixed blue and yellow with increased visibility | ~484 |
 | #282 | 9:09 PM | ✅ | Increased article description preview length from 120 to 250 characters | ~273 |
 </claude-mem-context>
