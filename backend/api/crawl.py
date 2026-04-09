@@ -52,7 +52,7 @@ def crawl_status(request: Request):
     scheduler = request.app.state.scheduler
     job = scheduler.scheduler.get_job("news_crawl") if hasattr(scheduler, 'scheduler') else None
     return {
-        "is_running": scheduler.is_running,
+        "is_running": scheduler.is_running or scheduler.is_run_once,
         "crawling_active": job is not None,
         "last_run": scheduler.last_run.isoformat() if scheduler.last_run else None,
         "last_error": scheduler.last_error,

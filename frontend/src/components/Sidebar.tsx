@@ -15,6 +15,7 @@ const PORTALS = [
 ] as const
 
 const INTERVALS = [
+  { value: 5, label: "5분" },
   { value: 15, label: "15분" },
   { value: 30, label: "30분" },
   { value: 60, label: "1시간" },

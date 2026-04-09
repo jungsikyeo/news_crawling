@@ -26,6 +26,7 @@ class CrawlScheduler:
         self.scheduler.start()
         self._lock = threading.Lock()
         self.is_running = False
+        self.is_run_once = False
         self.last_run: Optional[datetime] = None
         self.last_error: Optional[str] = None
         self.new_count = 0
@@ -120,9 +121,60 @@ class CrawlScheduler:
         except Exception:
             pass
 
+    def _run_once_job(self, keywords: List[str], portals: List[str], start_date: str = ""):
+        """즉시수집 전용 — 스케줄 크롤링과 독립적으로 실행"""
+        try:
+            conn = get_connection()
+            new_count = 0
+            total_count = 0
+
+            for portal_name in portals:
+                crawler_cls = CRAWLERS.get(portal_name)
+                if not crawler_cls:
+                    continue
+                crawler = crawler_cls()
+                for keyword in keywords:
+                    try:
+                        articles = crawler.search_all_pages(keyword, max_pages=3, start_date=start_date)
+                        total_count += len(articles)
+                        for article in articles:
+                            is_new = insert_news(
+                                conn,
+                                title=article["title"],
+                                url=article["url"],
+                                description=article.get("description", ""),
+                                publisher=article.get("publisher", ""),
+                                published_at=article.get("published_at", ""),
+                                keyword=keyword,
+                                portal=portal_name,
+                            )
+                            if is_new:
+                                new_count += 1
+                    except Exception as e:
+                        logger.error(f"[{portal_name}] 키워드 '{keyword}' 크롤링 에러: {e}")
+
+            conn.close()
+            self.new_count = new_count
+            self.total_count = total_count
+            self.last_run = datetime.now()
+            self.last_error = None
+            logger.info(f"즉시수집 완료: 총 {total_count}건 수집, 신규 {new_count}건")
+
+        except Exception as e:
+            self.last_error = str(e)
+            logger.error(f"즉시수집 에러: {e}")
+        finally:
+            self.is_run_once = False
+            if self._on_complete:
+                try:
+                    self._on_complete()
+                except Exception:
+                    pass
+
     def run_once(self, keywords: List[str], portals: List[str], start_date: str = ""):
+        self.is_run_once = True
         thread = threading.Thread(
-            target=self._crawl_job, args=(keywords, portals, start_date), daemon=True
+            target=self._run_once_job, args=(keywords, portals, start_date), daemon=True
         )
         thread.start()
 

@@ -56,15 +56,28 @@ function App() {
 
       // 수집 완료 감지: running이 true→false로 변하면 목록 갱신
       if (prevRunning.current && !isRunning) {
+        const total = s.total_count ?? 0
+        const newCnt = s.new_count ?? 0
+        // OS 알림
+        const ntTitle = "NewsDesk 수집 완료"
+        const ntBody = `총 ${total}건 수집, 신규 ${newCnt}건`
+        if ((window as any).electronAPI?.showNotification) {
+          (window as any).electronAPI.showNotification(ntTitle, ntBody)
+        } else if (Notification.permission === "granted") {
+          new Notification(ntTitle, { body: ntBody })
+        }
         if (runOnceWaiting.current) {
-          // 즉시수집: 완료 후 폴링 중지
+          // 즉시수집 완료
           runOnceWaiting.current = false
-          setPolling(false)
+          // 스케줄이 활성이면 폴링 유지, 아니면 중지
+          if (!s.crawling_active) {
+            setPolling(false)
+          }
           setModal({
             open: true,
             type: "success",
             title: "수집 완료",
-            message: `총 ${s.total_count ?? 0}건 수집, 신규 ${s.new_count ?? 0}건. 집계를 시작합니다.`,
+            message: `총 ${total}건 수집, 신규 ${newCnt}건. 집계를 시작합니다.`,
             autoCloseSeconds: 3,
             onAutoClose: () => {
               setModal((m) => ({ ...m, open: false }))
@@ -84,6 +97,13 @@ function App() {
   }, [])
 
   const [polling, setPolling] = useState(false)
+
+  // 알림 권한 요청
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission()
+    }
+  }, [])
 
   useEffect(() => {
     if (!polling) return

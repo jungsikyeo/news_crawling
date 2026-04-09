@@ -1,14 +1,21 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, Notification, ipcMain, nativeImage, Tray, Menu } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
 
 let mainWindow = null;
 let backendProcess = null;
+let tray = null;
 let quitting = false;
 
 const BACKEND_PORT = 8000;
 const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
+
+function getIconPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "icon.png")
+    : path.join(__dirname, "..", "assets", "icon.png");
+}
 
 function getBackendCommand() {
   if (app.isPackaged) {
@@ -85,18 +92,17 @@ function killBackend() {
 }
 
 async function createWindow() {
-  const iconPath = app.isPackaged
-    ? path.join(process.resourcesPath, "icon.png")
-    : path.join(__dirname, "..", "assets", "icon.png");
+  const icon = nativeImage.createFromPath(getIconPath());
 
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
     title: "NewsDesk",
-    icon: iconPath,
+    icon,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
@@ -105,7 +111,25 @@ async function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // 시스템 트레이 — Windows 알림 아이콘 표시에 필요
+  tray = new Tray(icon);
+  tray.setToolTip("NewsDesk");
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "열기", click: () => mainWindow?.show() },
+    { label: "종료", click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on("click", () => mainWindow?.show());
 }
+
+// Windows 알림에 앱 이름 표시
+app.setAppUserModelId("NewsDesk");
+
+// 렌더러에서 알림 요청 수신
+ipcMain.on("show-notification", (_event, title, body) => {
+  const icon = nativeImage.createFromPath(getIconPath());
+  new Notification({ title, body, icon }).show();
+});
 
 app.whenReady().then(async () => {
   startBackend();
@@ -122,6 +146,7 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   quitting = true;
   killBackend();
+  if (tray) { tray.destroy(); tray = null; }
   app.quit();
 });
 
