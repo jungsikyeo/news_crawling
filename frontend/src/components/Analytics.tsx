@@ -167,16 +167,25 @@ export function Analytics() {
 
   const allDates = [...new Set(s.daily.map((d) => d.date))].sort()
   const allKeywords = [...new Set(s.daily.map((d) => d.keyword))]
-  const dailySeries = allKeywords.map((kw, i) => ({
-    name: kw,
-    type: "bar" as const,
-    stack: "total",
-    data: allDates.map((date) => {
-      const found = s.daily.find((d) => d.date === date && d.keyword === kw)
-      return found?.count ?? 0
-    }),
-    itemStyle: { opacity: 0.7 + (i / allKeywords.length) * 0.3 },
-  }))
+  const DAILY_COLORS = [accentColor, "#818cf8", "#a78bfa", "#c084fc", "#e879f9", "#f472b6", "#fb923c", "#34d399"]
+  const dailySeries = allKeywords.map((kw, i) => {
+    const color = DAILY_COLORS[i % DAILY_COLORS.length]
+    return {
+      name: kw,
+      type: "line" as const,
+      smooth: true,
+      areaStyle: { opacity: 0.12, color },
+      lineStyle: { width: 2, color },
+      symbol: "circle",
+      symbolSize: 5,
+      showSymbol: allDates.length <= 14,
+      data: allDates.map((date) => {
+        const found = s.daily.find((d) => d.date === date && d.keyword === kw)
+        return found?.count ?? 0
+      }),
+      itemStyle: { color },
+    }
+  })
 
   const tooltipStyle = {
     backgroundColor: "rgba(10,10,20,0.92)",
@@ -201,7 +210,6 @@ export function Analytics() {
       axisLabel: { color: textColor, fontSize: 11 },
       splitLine: { lineStyle: { color: gridColor } },
     },
-    color: [accentColor, "#818cf8", "#a78bfa", "#c084fc", "#e879f9"],
     series: dailySeries,
   }
 
