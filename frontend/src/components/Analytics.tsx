@@ -263,13 +263,16 @@ export function Analytics() {
     }],
   }
 
+  // 0~23시 전체를 채워 데이터가 1개뿐일 때도 차트가 표시되도록 함
+  const hourlyMap = Object.fromEntries(s.hourly.map((h) => [String(h.hour).padStart(2, "0"), h.count]))
+  const allHours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
   const hourlyOption = {
     backgroundColor: "transparent",
     tooltip: { trigger: "axis" as const, ...tooltipStyle },
     grid: { left: "3%", right: "3%", bottom: "3%", top: "3%", containLabel: true },
     xAxis: {
       type: "category" as const,
-      data: s.hourly.map((h) => `${h.hour}시`),
+      data: allHours.map((h) => `${h}시`),
       axisLine: { lineStyle: { color: gridColor } },
       axisLabel: { color: textColor, fontSize: 11 },
       splitLine: { lineStyle: { color: gridColor } },
@@ -285,9 +288,11 @@ export function Analytics() {
       type: "line" as const,
       smooth: true,
       areaStyle: { opacity: 0.15 },
-      data: s.hourly.map((h) => h.count),
+      data: allHours.map((h) => hourlyMap[h] ?? 0),
       lineStyle: { width: 2 },
-      symbol: "none",
+      symbol: "circle",
+      symbolSize: 4,
+      showSymbol: false,
     }],
   }
 
