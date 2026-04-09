@@ -53,14 +53,14 @@ export function Modal({ open, type = "info", title, message, onClose, onConfirm,
       className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md"
       onClick={(e) => { if (e.target === e.currentTarget && !autoCloseSeconds) onClose() }}
     >
-      <div className="bg-white dark:bg-zinc-900 border border-border rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4 animate-fade-up">
+      <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-6 shadow-2xl max-w-sm w-full mx-4 animate-fade-up">
         <div className="flex items-start gap-3 mb-4">
           <div className={`h-10 w-10 rounded-full ${bgClass} flex items-center justify-center flex-shrink-0`}>
             <Icon className={`h-5 w-5 ${iconClass}`} />
           </div>
           <div className="flex-1 min-w-0">
-            {title && <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">{title}</p>}
-            <p className="text-sm text-zinc-700 dark:text-zinc-300">{message}</p>
+            {title && <p className="text-sm font-semibold text-[hsl(var(--card-foreground))] mb-1">{title}</p>}
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">{message}</p>
             {autoCloseSeconds && countdown > 0 && (
               <p className="text-xs text-primary mt-2 font-medium">
                 {countdown}초 후 기사 목록으로 이동합니다...
