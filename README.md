@@ -12,7 +12,7 @@
 - **스크랩** — 관심 기사 북마크 및 관리
 - **CSV 내보내기** — 수집된 기사 데이터 다운로드
 - **테마** — 다크 5종 + 라이트 3종
-- **Windows exe 배포** — PyInstaller를 통한 단일 실행 파일 패키징
+- **Windows 배포** — Electron + PyInstaller 기반 설치 프로그램 및 포터블 실행 파일
 
 ## 기술 스택
 
@@ -23,7 +23,8 @@
 | 프론트엔드 | React 19, TypeScript, Vite, Tailwind CSS v4 |
 | 차트 | ECharts (echarts-for-react) |
 | UI 컴포넌트 | Radix UI, Lucide React |
-| 빌드 | PyInstaller |
+| 데스크톱 | Electron, electron-builder (NSIS 인스톨러) |
+| 빌드 | PyInstaller (백엔드 exe), electron-builder (데스크톱 패키징) |
 
 ## 시작하기
 
@@ -40,6 +41,9 @@ pip install -r requirements.txt
 
 # 프론트엔드 의존성 설치
 cd frontend && npm install
+
+# Electron 의존성 설치
+cd electron && npm install
 ```
 
 ### 개발 모드 실행
@@ -54,16 +58,28 @@ cd backend && uvicorn main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
+Electron 개발 모드로 실행할 수도 있습니다 (백엔드를 자동으로 시작):
+
+```bash
+cd electron && npx electron .
+```
+
 ### 프로덕션 빌드
 
 ```bash
-# React 빌드 → PyInstaller exe 패키징
+# 전체 빌드 (React 빌드 → PyInstaller exe → Electron 패키징)
 python build.py
 ```
 
-빌드 결과물은 `dist/NewsDesk/NewsDesk.exe`에 생성됩니다.
+빌드 결과물:
 
-### 간편 실행
+| 출력 경로 | 설명 |
+|-----------|------|
+| `dist/NewsDesk/NewsDesk.exe` | PyInstaller 백엔드 단독 실행 파일 |
+| `dist-electron/win-unpacked/NewsDesk.exe` | Electron 포터블 실행 파일 |
+| `dist-electron/NewsDesk Setup 1.0.0.exe` | NSIS 설치 프로그램 |
+
+### 간편 실행 (브라우저 모드)
 
 ```bash
 # FastAPI 서버 시작 + 브라우저 자동 오픈
@@ -97,10 +113,16 @@ news_crawling/
 │       │   ├── NewsList.tsx  #   기사 목록 (무한 스크롤)
 │       │   ├── Analytics.tsx #   통계 대시보드
 │       │   ├── Scraps.tsx    #   스크랩 관리
-│       │   └── History.tsx   #   검색 이력
+│       │   ├── History.tsx   #   검색 이력
+│       │   └── ui/           #   공통 UI (Button, Input, Select 등)
 │       └── hooks/
 │           └── useApi.ts     # API 클라이언트
-├── build.py                  # PyInstaller 빌드 스크립트
+├── electron/
+│   ├── main.js              # Electron 메인 프로세스
+│   └── package.json         # Electron 의존성 및 빌드 설정
+├── assets/                   # 아이콘 리소스 (icon.png, icon.ico)
+├── build.py                  # 전체 빌드 스크립트 (프론트엔드 + PyInstaller + Electron)
+├── server_entry.py           # Electron용 백엔드 진입점
 ├── launcher.py               # 런처 (서버 + 브라우저)
 └── requirements.txt          # Python 의존성
 ```
