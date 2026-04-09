@@ -1,10 +1,16 @@
 import sqlite3
+import sys
 import os
 from datetime import datetime
 from typing import Optional
 
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "news.db")
+# PyInstaller 번들 환경에서는 exe 옆 data/ 폴더에 저장 (_MEIPASS는 읽기 전용 임시 디렉토리)
+if getattr(sys, 'frozen', False):
+    _data_dir = os.path.join(os.path.dirname(sys.executable), "data")
+else:
+    _data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+DB_PATH = os.path.join(_data_dir, "news.db")
 
 
 def get_connection() -> sqlite3.Connection:

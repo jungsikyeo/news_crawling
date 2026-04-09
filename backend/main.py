@@ -43,7 +43,11 @@ app.include_router(stats_router, prefix="/api/stats", tags=["stats"])
 app.include_router(history_router, prefix="/api/history", tags=["history"])
 
 # Serve React build if exists
-frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+# PyInstaller 번들 환경에서는 _MEIPASS 기준, 개발 환경에서는 상대 경로
+if getattr(sys, 'frozen', False):
+    frontend_dist = os.path.join(sys._MEIPASS, "frontend", "dist")
+else:
+    frontend_dist = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 
