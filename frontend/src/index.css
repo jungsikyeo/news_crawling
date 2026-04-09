@@ -1,0 +1,408 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import "tailwindcss";
+
+/* ── midnight (default) ─────────────────────────────── */
+:root,
+[data-theme="midnight"],
+[data-theme="emerald"],
+[data-theme="rose"],
+[data-theme="amber"],
+[data-theme="ocean"] {
+  --highlight-keyword: rgba(249, 115, 22, 0.45);
+}
+
+[data-theme="light"],
+[data-theme="paper"],
+[data-theme="arctic"] {
+  --highlight-keyword: rgba(59, 130, 246, 0.35);
+}
+
+:root,
+[data-theme="midnight"] {
+  --background: 222 47% 4%;
+  --foreground: 213 31% 91%;
+
+  --card: 222 47% 7%;
+  --card-foreground: 213 31% 91%;
+
+  --popover: 222 47% 6%;
+  --popover-foreground: 213 31% 91%;
+
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 222 47% 12%;
+  --secondary-foreground: 213 31% 80%;
+
+  --muted: 222 47% 10%;
+  --muted-foreground: 215 20% 55%;
+
+  --accent: 239 84% 67%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 222 47% 14%;
+  --input: 222 47% 12%;
+  --ring: 239 84% 67%;
+
+  --radius: 0.5rem;
+}
+
+/* ── emerald ────────────────────────────────────────── */
+[data-theme="emerald"] {
+  --background: 160 50% 4%;
+  --foreground: 150 30% 90%;
+
+  --card: 160 50% 7%;
+  --card-foreground: 150 30% 90%;
+
+  --popover: 160 50% 6%;
+  --popover-foreground: 150 30% 90%;
+
+  --primary: 160 84% 39%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 160 40% 12%;
+  --secondary-foreground: 150 25% 75%;
+
+  --muted: 160 40% 10%;
+  --muted-foreground: 155 20% 50%;
+
+  --accent: 160 84% 39%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 160 40% 14%;
+  --input: 160 40% 12%;
+  --ring: 160 84% 39%;
+
+  --radius: 0.5rem;
+}
+
+/* ── rose ───────────────────────────────────────────── */
+[data-theme="rose"] {
+  --background: 340 50% 4%;
+  --foreground: 340 30% 91%;
+
+  --card: 340 50% 7%;
+  --card-foreground: 340 30% 91%;
+
+  --popover: 340 50% 6%;
+  --popover-foreground: 340 30% 91%;
+
+  --primary: 343 87% 60%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 340 40% 12%;
+  --secondary-foreground: 340 25% 75%;
+
+  --muted: 340 40% 10%;
+  --muted-foreground: 340 20% 50%;
+
+  --accent: 343 87% 60%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 340 40% 14%;
+  --input: 340 40% 12%;
+  --ring: 343 87% 60%;
+
+  --radius: 0.5rem;
+}
+
+/* ── amber ──────────────────────────────────────────── */
+[data-theme="amber"] {
+  --background: 30 50% 4%;
+  --foreground: 40 30% 91%;
+
+  --card: 30 50% 7%;
+  --card-foreground: 40 30% 91%;
+
+  --popover: 30 50% 6%;
+  --popover-foreground: 40 30% 91%;
+
+  --primary: 38 92% 50%;
+  --primary-foreground: 0 0% 5%;
+
+  --secondary: 30 40% 12%;
+  --secondary-foreground: 40 25% 75%;
+
+  --muted: 30 40% 10%;
+  --muted-foreground: 35 20% 50%;
+
+  --accent: 38 92% 50%;
+  --accent-foreground: 0 0% 5%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 30 40% 14%;
+  --input: 30 40% 12%;
+  --ring: 38 92% 50%;
+
+  --radius: 0.5rem;
+}
+
+/* ── ocean ──────────────────────────────────────────── */
+[data-theme="ocean"] {
+  --background: 210 60% 4%;
+  --foreground: 200 30% 91%;
+
+  --card: 210 60% 7%;
+  --card-foreground: 200 30% 91%;
+
+  --popover: 210 60% 6%;
+  --popover-foreground: 200 30% 91%;
+
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 50% 12%;
+  --secondary-foreground: 200 25% 75%;
+
+  --muted: 210 50% 10%;
+  --muted-foreground: 205 20% 50%;
+
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 210 50% 14%;
+  --input: 210 50% 12%;
+  --ring: 199 89% 48%;
+
+  --radius: 0.5rem;
+}
+
+/* ── light ──────────────────────────────────────────── */
+[data-theme="light"] {
+  --background: 0 0% 98%;
+  --foreground: 222 47% 11%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 14% 93%;
+  --secondary-foreground: 222 47% 20%;
+
+  --muted: 220 14% 95%;
+  --muted-foreground: 220 9% 46%;
+
+  --accent: 239 84% 67%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 13% 87%;
+  --input: 220 13% 91%;
+  --ring: 239 84% 67%;
+
+  --radius: 0.5rem;
+}
+
+/* ── paper (warm beige) ────────────────────────────── */
+[data-theme="paper"] {
+  --background: 40 33% 96%;
+  --foreground: 30 20% 14%;
+
+  --card: 40 33% 100%;
+  --card-foreground: 30 20% 14%;
+
+  --popover: 40 33% 99%;
+  --popover-foreground: 30 20% 14%;
+
+  --primary: 25 95% 53%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 35 25% 90%;
+  --secondary-foreground: 30 20% 25%;
+
+  --muted: 35 20% 93%;
+  --muted-foreground: 30 10% 46%;
+
+  --accent: 25 95% 53%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 35 20% 84%;
+  --input: 35 20% 89%;
+  --ring: 25 95% 53%;
+
+  --radius: 0.5rem;
+}
+
+/* ── arctic (cool blue-white) ──────────────────────── */
+[data-theme="arctic"] {
+  --background: 210 40% 97%;
+  --foreground: 215 25% 14%;
+
+  --card: 210 40% 100%;
+  --card-foreground: 215 25% 14%;
+
+  --popover: 210 40% 100%;
+  --popover-foreground: 215 25% 14%;
+
+  --primary: 199 89% 48%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 210 30% 92%;
+  --secondary-foreground: 215 25% 22%;
+
+  --muted: 210 25% 94%;
+  --muted-foreground: 215 15% 46%;
+
+  --accent: 199 89% 48%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 210 25% 86%;
+  --input: 210 25% 90%;
+  --ring: 199 89% 48%;
+
+  --radius: 0.5rem;
+}
+
+/* ── Base styles ────────────────────────────────────── */
+* {
+  border-color: hsl(var(--border));
+  box-sizing: border-box;
+}
+
+button, [role="button"], select, a, input[type="checkbox"], input[type="radio"], label[for] {
+  cursor: pointer;
+}
+
+
+body {
+  margin: 0;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s, color 0.3s;
+  position: relative;
+}
+
+/* Subtle noise grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* ── Glass utility ──────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: hsl(var(--card) / 0.6);
+}
+
+/* ── Animations ─────────────────────────────────────── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px hsl(var(--primary) / 0.35);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 300ms ease forwards;
+  animation-delay: var(--delay, 0ms);
+  opacity: 0;
+}
+
+/* ── Card hover ─────────────────────────────────────── */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px hsl(var(--primary) / 0.12), 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .glass,
+[data-theme="paper"] .glass,
+[data-theme="arctic"] .glass {
+  background-color: hsl(var(--card) / 0.85);
+}
+
+[data-theme="light"] body::after,
+[data-theme="paper"] body::after,
+[data-theme="arctic"] body::after {
+  opacity: 0.01;
+}
+
+/* ── Date input calendar icon ──────────────────────── */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="paper"] input[type="date"]::-webkit-calendar-picker-indicator,
+[data-theme="arctic"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+
+/* ── Scrollbar ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

@@ -1,0 +1,27 @@
+# IDE
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+dist/
+build/
+*.spec
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Data
+data/
+
+# OS
+.DS_Store
+
+# OMC
+.omc/
