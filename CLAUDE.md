@@ -1,3 +1,64 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 프로젝트 개요
+
+**NewsDesk** — 네이버, 다음, 네이트 뉴스 포털에서 기사를 수집하는 데스크톱 애플리케이션. FastAPI 백엔드 + React 프론트엔드 구조이며, PyInstaller로 Windows exe 패키징 가능.
+
+## 개발 명령어
+
+```bash
+# 백엔드 실행 (개발 모드)
+cd backend && uvicorn main:app --reload --port 8000
+
+# 프론트엔드 실행 (개발 모드, 백엔드 프록시 자동 설정됨)
+cd frontend && npm run dev
+
+# 프론트엔드 빌드
+cd frontend && npm run build
+
+# 전체 빌드 (exe 패키징)
+python build.py
+
+# 런처 실행 (서버 + 브라우저 자동 오픈)
+python launcher.py
+```
+
+## 아키텍처
+
+### 백엔드 (Python / FastAPI)
+
+- **`main.py`** — FastAPI 앱 진입점. CORS, 라우터 마운트, React 정적 파일 서빙
+- **`scheduler.py`** — APScheduler 기반 크롤링 스케줄러. 쓰레드 풀에서 크롤링 실행, 상태 추적, 완료 콜백 처리
+- **`db/database.py`** — SQLite(WAL 모드) 데이터베이스. 스키마 4개 테이블(`news`, `news_portals`, `search_history`, `scraps`), 중복 검출(제목 유사도 75% 기준 SequenceMatcher), 상대시간 파싱("5분 전" → ISO datetime)
+- **`crawlers/`** — 포털별 크롤러. `base.py`의 추상 클래스를 상속하며 재시도 로직, 타임아웃, 레이트리밋 백오프 포함
+  - `naver.py` — `class*="fender-ui"` 셀렉터 기반 (2026년 DOM 구조)
+  - `daum.py` — `div.item-title` 컨테이너 파싱
+  - `nate.py` — 다음과 동일한 DOM 구조 (공유 검색엔진)
+- **`api/`** — REST 엔드포인트: `crawl.py`(시작/중지/즉시수집/상태), `news.py`(목록/스크랩/CSV내보내기/초기화), `stats.py`(통계 6종), `history.py`(검색이력)
+
+### 프론트엔드 (React 19 / TypeScript / Vite)
+
+- **`App.tsx`** — 탭 기반 레이아웃(기사목록, 분석, 스크랩, 이력). 상태 폴링 2초 간격으로 크롤링 진행 상황 추적
+- **`components/Sidebar.tsx`** — 키워드 입력, 포털 선택(3개), 검색 시작일, 수집 간격, 제어 버튼
+- **`components/NewsList.tsx`** — 무한 스크롤 기사 목록. 키워드/포털/날짜/텍스트 필터링, 스크랩 기능
+- **`components/Analytics.tsx`** — ECharts 기반 통계 대시보드 (일별, 키워드, 포털, 언론사, 시간대별 차트)
+- **`hooks/useApi.ts`** — 전체 API 클라이언트. 타입 인터페이스 정의 포함
+- **`components/ThemeSelector.tsx`** — 다크 5종 + 라이트 3종 테마 (localStorage 저장)
+
+### 핵심 동작 방식
+
+- **상태 폴링**: 크롤링 활성 시 `/api/crawl/status`를 2초마다 폴링. `is_running`이 true→false 전환 시 완료 감지 후 뉴스 목록 새로고침 또는 성공 모달 표시
+- **중복 검출**: 제목을 정규화(구두점 제거, 소문자화) 후 SequenceMatcher로 기존 기사와 비교. 유사도 ≥ 0.75이면 중복으로 판단하고 `news_portals` 테이블에만 추가
+- **빌드**: `build.py`가 React 빌드 → PyInstaller exe 패키징을 순차 실행. `launcher.py`는 FastAPI를 데몬 스레드로 실행 후 브라우저 자동 오픈
+
+### 기술 스택
+
+- **백엔드**: FastAPI, Uvicorn, SQLite, APScheduler, BeautifulSoup4, lxml, Pandas
+- **프론트엔드**: React 19, TypeScript, Vite, Tailwind CSS v4, ECharts, Radix UI, Lucide React
+- **빌드**: PyInstaller (Windows exe)
+
 <claude-mem-context>
 # Recent Activity
 
