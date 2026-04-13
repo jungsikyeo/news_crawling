@@ -1,6 +1,7 @@
 # IDE
 .idea/
 *.iml
+.vscode/
 
 # Python
 __pycache__/
@@ -12,16 +13,33 @@ venv/
 dist/
 build/
 *.spec
+*.egg-info/
 
 # Node
-frontend/node_modules/
+node_modules/
 frontend/dist/
 
-# Data
+# Electron
+dist-electron/
+electron/node_modules/
+
+# Data / Logs
 data/
+logs/
+*.db
+*.log
 
 # OS
 .DS_Store
+__MACOSX/
+Thumbs.db
+Desktop.ini
+
+# Claude Code
+.claude/
 
 # OMC
 .omc/
+
+# Misc
+news_crawling/
