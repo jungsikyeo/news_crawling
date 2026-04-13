@@ -17,4 +17,15 @@ import uvicorn
 from main import app
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+    except Exception:
+        import traceback
+        if getattr(sys, 'frozen', False):
+            _install_root = os.path.dirname(os.path.dirname(os.path.dirname(sys.executable)))
+        else:
+            _install_root = os.path.dirname(os.path.abspath(__file__))
+        log_dir = os.path.join(_install_root, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "error.log"), "w", encoding="utf-8") as f:
+            f.write(traceback.format_exc())

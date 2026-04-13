@@ -1,0 +1,49 @@
+{
+  "name": "newsdesk",
+  "version": "1.0.3",
+  "description": "NewsDesk - 뉴스 수집 데스크톱 앱",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.newsdesk.app",
+    "productName": "NewsDesk",
+    "files": [
+      "main.js",
+      "preload.js",
+      "!node_modules"
+    ],
+    "directories": {
+      "output": "../dist-electron"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "../assets/icon.ico"
+    },
+    "extraResources": [
+      {
+        "from": "../dist/NewsDesk",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../assets/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "npmRebuild": false,
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "include": "installer.nsh"
+    }
+  }
+}

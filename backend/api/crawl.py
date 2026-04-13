@@ -56,6 +56,7 @@ def crawl_status(request: Request):
         "crawling_active": job is not None,
         "last_run": scheduler.last_run.isoformat() if scheduler.last_run else None,
         "last_error": scheduler.last_error,
+        "errors": scheduler.errors,
         "new_count": scheduler.new_count,
         "total_count": scheduler.total_count,
         "next_run": job.next_run_time.isoformat() if job and job.next_run_time else None,

@@ -38,8 +38,13 @@ def _run_server():
         print(err_msg)
         # frozen 환경에서 stdout이 안 보일 수 있으므로 파일에도 기록
         try:
-            log_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "error.log")
-            with open(log_path, "w", encoding="utf-8") as f:
+            if getattr(sys, 'frozen', False):
+                _install_root = os.path.dirname(os.path.dirname(os.path.dirname(sys.executable)))
+            else:
+                _install_root = os.path.dirname(os.path.abspath(__file__))
+            log_dir = os.path.join(_install_root, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            with open(os.path.join(log_dir, "error.log"), "w", encoding="utf-8") as f:
                 f.write(err_msg)
         except Exception:
             pass

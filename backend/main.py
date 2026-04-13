@@ -1,5 +1,6 @@
 import sys
 import os
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,22 @@ from fastapi.staticfiles import StaticFiles
 
 # Ensure backend package imports work
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# 파일 로깅 설정 — 설치 루트의 logs/ 폴더에 생성
+if getattr(sys, 'frozen', False):
+    # exe: resources/backend/NewsDesk.exe → 설치 루트는 3단계 위
+    _install_root = os.path.dirname(os.path.dirname(os.path.dirname(sys.executable)))
+    _log_dir = os.path.join(_install_root, "logs")
+else:
+    _log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+os.makedirs(_log_dir, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(_log_dir, "newsdesk.log"), encoding="utf-8"),
+    ],
+)
 
 from db.database import init_db
 from scheduler import CrawlScheduler

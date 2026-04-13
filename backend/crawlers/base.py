@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 
 import requests
+import urllib3
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,9 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
 ]
+
+# SSL 검증 비활성화 시 경고 억제
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class BaseCrawler(ABC):
@@ -29,6 +33,7 @@ class BaseCrawler(ABC):
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
         })
+        self.session.verify = False
 
     def _request(self, url: str, params: Optional[dict] = None) -> Optional[str]:
         for attempt in range(1, self.max_retries + 1):
@@ -38,8 +43,10 @@ class BaseCrawler(ABC):
                 return resp.text
             except requests.exceptions.Timeout:
                 logger.warning(f"[{self.portal_name}] 타임아웃 (시도 {attempt}/{self.max_retries}): {url}")
-            except requests.exceptions.ConnectionError:
-                logger.warning(f"[{self.portal_name}] 연결 실패 (시도 {attempt}/{self.max_retries}): {url}")
+            except requests.exceptions.SSLError as e:
+                logger.error(f"[{self.portal_name}] SSL 에러 (시도 {attempt}/{self.max_retries}): {e}")
+            except requests.exceptions.ConnectionError as e:
+                logger.warning(f"[{self.portal_name}] 연결 실패 (시도 {attempt}/{self.max_retries}): {e}")
             except requests.exceptions.HTTPError as e:
                 logger.warning(f"[{self.portal_name}] HTTP 에러 {e.response.status_code} (시도 {attempt}/{self.max_retries})")
                 if e.response.status_code == 429:

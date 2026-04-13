@@ -29,6 +29,7 @@ class CrawlScheduler:
         self.is_run_once = False
         self.last_run: Optional[datetime] = None
         self.last_error: Optional[str] = None
+        self.errors: List[str] = []
         self.new_count = 0
         self.total_count = 0
         self._on_complete: Optional[Callable] = None
@@ -42,6 +43,7 @@ class CrawlScheduler:
                 logger.info("이전 크롤링이 아직 진행 중입니다.")
                 return
             self.is_running = True
+            self.errors = []
 
         try:
             conn = get_connection()
@@ -73,17 +75,20 @@ class CrawlScheduler:
                             if is_new:
                                 new_count += 1
                     except Exception as e:
-                        logger.error(f"[{portal_name}] 키워드 '{keyword}' 크롤링 에러: {e}")
+                        err_msg = f"[{portal_name}] '{keyword}': {e}"
+                        self.errors.append(err_msg)
+                        logger.error(f"크롤링 에러: {err_msg}")
 
             conn.close()
             self.new_count = new_count
             self.total_count = total_count
             self.last_run = datetime.now()
-            self.last_error = None
-            logger.info(f"크롤링 완료: 총 {total_count}건 수집, 신규 {new_count}건")
+            self.last_error = "; ".join(self.errors) if self.errors else None
+            logger.info(f"크롤링 완료: 총 {total_count}건 수집, 신규 {new_count}건, 에러 {len(self.errors)}건")
 
         except Exception as e:
             self.last_error = str(e)
+            self.errors.append(str(e))
             logger.error(f"크롤링 작업 에러: {e}")
         finally:
             with self._lock:
@@ -123,6 +128,7 @@ class CrawlScheduler:
 
     def _run_once_job(self, keywords: List[str], portals: List[str], start_date: str = ""):
         """즉시수집 전용 — 스케줄 크롤링과 독립적으로 실행"""
+        self.errors = []
         try:
             conn = get_connection()
             new_count = 0
@@ -151,17 +157,20 @@ class CrawlScheduler:
                             if is_new:
                                 new_count += 1
                     except Exception as e:
-                        logger.error(f"[{portal_name}] 키워드 '{keyword}' 크롤링 에러: {e}")
+                        err_msg = f"[{portal_name}] '{keyword}': {e}"
+                        self.errors.append(err_msg)
+                        logger.error(f"크롤링 에러: {err_msg}")
 
             conn.close()
             self.new_count = new_count
             self.total_count = total_count
             self.last_run = datetime.now()
-            self.last_error = None
-            logger.info(f"즉시수집 완료: 총 {total_count}건 수집, 신규 {new_count}건")
+            self.last_error = "; ".join(self.errors) if self.errors else None
+            logger.info(f"즉시수집 완료: 총 {total_count}건 수집, 신규 {new_count}건, 에러 {len(self.errors)}건")
 
         except Exception as e:
             self.last_error = str(e)
+            self.errors.append(str(e))
             logger.error(f"즉시수집 에러: {e}")
         finally:
             self.is_run_once = False
