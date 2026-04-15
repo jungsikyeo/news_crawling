@@ -62,13 +62,42 @@ def init_db():
             FOREIGN KEY (news_id) REFERENCES news(id)
         );
 
+        CREATE TABLE IF NOT EXISTS crawl_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            history_id INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            new_count INTEGER DEFAULT 0,
+            total_count INTEGER DEFAULT 0,
+            FOREIGN KEY (history_id) REFERENCES search_history(id)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_news_title_norm ON news(title_normalized);
         CREATE INDEX IF NOT EXISTS idx_news_keyword ON news(keyword);
         CREATE INDEX IF NOT EXISTS idx_news_portal ON news(portal);
         CREATE INDEX IF NOT EXISTS idx_news_crawled_at ON news(crawled_at);
         CREATE INDEX IF NOT EXISTS idx_news_publisher ON news(publisher);
+        CREATE INDEX IF NOT EXISTS idx_crawl_sessions_history ON crawl_sessions(history_id);
     """)
     conn.commit()
+
+    # 기존 테이블에 새 컬럼 추가 (이미 존재하면 무시)
+    for stmt in [
+        "ALTER TABLE news ADD COLUMN session_id INTEGER REFERENCES crawl_sessions(id)",
+        "ALTER TABLE search_history ADD COLUMN mode TEXT DEFAULT 'OR'",
+    ]:
+        try:
+            conn.execute(stmt)
+        except Exception:
+            pass
+    conn.commit()
+
+    # session_id 컬럼이 추가된 후 인덱스 생성
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_news_session ON news(session_id)")
+        conn.commit()
+    except Exception:
+        pass
     conn.close()
 
 
@@ -115,7 +144,8 @@ def _resolve_relative_time(text: str) -> str:
 
 
 def insert_news(conn: sqlite3.Connection, title: str, url: str, description: str,
-                publisher: str, published_at: str, keyword: str, portal: str) -> bool:
+                publisher: str, published_at: str, keyword: str, portal: str,
+                session_id: Optional[int] = None) -> bool:
     norm = normalize_title(title)
     dup_id = find_duplicate(conn, title)
     now = datetime.now().isoformat()
@@ -138,9 +168,9 @@ def insert_news(conn: sqlite3.Connection, title: str, url: str, description: str
 
     cursor = conn.execute(
         """INSERT INTO news (title, url, description, publisher, published_at,
-           keyword, portal, crawled_at, title_normalized)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (title, url, description, publisher, published_at, keyword, portal, now, norm)
+           keyword, portal, crawled_at, title_normalized, session_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (title, url, description, publisher, published_at, keyword, portal, now, norm, session_id)
     )
     news_id = cursor.lastrowid
     conn.execute(
@@ -154,7 +184,14 @@ def insert_news(conn: sqlite3.Connection, title: str, url: str, description: str
 def get_news_list(conn: sqlite3.Connection, keyword: Optional[str] = None,
                   portal: Optional[str] = None, limit: int = 100, offset: int = 0,
                   search: Optional[str] = None,
-                  date_from: Optional[str] = None, date_to: Optional[str] = None):
+                  date_from: Optional[str] = None, date_to: Optional[str] = None,
+                  sort_by: str = "crawled_at", sort_order: str = "desc",
+                  session_id: Optional[int] = None, history_id: Optional[int] = None):
+    if sort_by not in ("crawled_at", "published_at"):
+        sort_by = "crawled_at"
+    if sort_order not in ("asc", "desc"):
+        sort_order = "desc"
+
     query = """
         SELECT n.*, GROUP_CONCAT(DISTINCT np.portal) as portals,
                GROUP_CONCAT(DISTINCT np.url) as portal_urls
@@ -178,13 +215,45 @@ def get_news_list(conn: sqlite3.Connection, keyword: Optional[str] = None,
     if date_to:
         query += " AND DATE(n.crawled_at) <= ?"
         params.append(date_to)
-    query += " GROUP BY n.id ORDER BY n.crawled_at DESC LIMIT ? OFFSET ?"
+    if session_id:
+        query += " AND n.session_id = ?"
+        params.append(session_id)
+    if history_id:
+        query += " AND n.session_id IN (SELECT id FROM crawl_sessions WHERE history_id = ?)"
+        params.append(history_id)
+    query += f" GROUP BY n.id ORDER BY n.{sort_by} {sort_order} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return conn.execute(query, params).fetchall()
 
 
-def get_news_count(conn: sqlite3.Connection) -> int:
-    return conn.execute("SELECT COUNT(*) FROM news").fetchone()[0]
+def get_news_count(conn: sqlite3.Connection, keyword: Optional[str] = None,
+                   portal: Optional[str] = None, search: Optional[str] = None,
+                   date_from: Optional[str] = None, date_to: Optional[str] = None,
+                   session_id: Optional[int] = None, history_id: Optional[int] = None) -> int:
+    query = "SELECT COUNT(*) FROM news n WHERE 1=1"
+    params = []
+    if keyword:
+        query += " AND n.keyword = ?"
+        params.append(keyword)
+    if portal:
+        query += " AND EXISTS (SELECT 1 FROM news_portals np2 WHERE np2.news_id = n.id AND np2.portal = ?)"
+        params.append(portal)
+    if search:
+        query += " AND (n.title LIKE ? OR n.description LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+    if date_from:
+        query += " AND DATE(n.crawled_at) >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND DATE(n.crawled_at) <= ?"
+        params.append(date_to)
+    if session_id:
+        query += " AND n.session_id = ?"
+        params.append(session_id)
+    if history_id:
+        query += " AND n.session_id IN (SELECT id FROM crawl_sessions WHERE history_id = ?)"
+        params.append(history_id)
+    return conn.execute(query, params).fetchone()[0]
 
 
 def toggle_scrap(conn: sqlite3.Connection, news_id: int) -> bool:
@@ -229,12 +298,13 @@ def reset_all_data(conn: sqlite3.Connection):
 
 
 def save_search_history(conn: sqlite3.Connection, keywords: str, portals: str,
-                        interval_minutes: int):
-    conn.execute(
-        "INSERT INTO search_history (keywords, portals, interval_minutes, created_at) VALUES (?, ?, ?, ?)",
-        (keywords, portals, interval_minutes, datetime.now().isoformat())
+                        interval_minutes: int, mode: str = "OR") -> int:
+    cursor = conn.execute(
+        "INSERT INTO search_history (keywords, portals, interval_minutes, created_at, mode) VALUES (?, ?, ?, ?, ?)",
+        (keywords, portals, interval_minutes, datetime.now().isoformat(), mode)
     )
     conn.commit()
+    return cursor.lastrowid
 
 
 def get_search_history(conn: sqlite3.Connection):
@@ -340,3 +410,32 @@ def get_stats_article_hourly(conn: sqlite3.Connection, date_from=None, date_to=N
         HAVING hour IS NOT NULL
         ORDER BY hour
     """, params).fetchall()
+
+
+def create_crawl_session(conn: sqlite3.Connection, history_id: int) -> int:
+    cursor = conn.execute(
+        "INSERT INTO crawl_sessions (history_id, started_at) VALUES (?, ?)",
+        (history_id, datetime.now().isoformat())
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def complete_crawl_session(conn: sqlite3.Connection, session_id: int,
+                           new_count: int, total_count: int):
+    conn.execute(
+        "UPDATE crawl_sessions SET completed_at = ?, new_count = ?, total_count = ? WHERE id = ?",
+        (datetime.now().isoformat(), new_count, total_count, session_id)
+    )
+    conn.commit()
+
+
+def get_sessions_by_history(conn: sqlite3.Connection, history_id: int):
+    return conn.execute(
+        """SELECT cs.*,
+           (SELECT COUNT(*) FROM news n WHERE n.session_id = cs.id) as article_count
+           FROM crawl_sessions cs
+           WHERE cs.history_id = ?
+           ORDER BY cs.started_at DESC""",
+        (history_id,)
+    ).fetchall()

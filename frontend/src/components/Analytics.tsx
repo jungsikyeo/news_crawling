@@ -195,27 +195,29 @@ export function Analytics() {
     }
   })
 
+  const chartFont = "'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
+
   const tooltipStyle = {
     backgroundColor: "rgba(10,10,20,0.92)",
     borderColor: gridColor,
-    textStyle: { color: textColor },
+    textStyle: { color: textColor, fontFamily: chartFont },
   }
 
   const dailyOption = {
     backgroundColor: "transparent",
     tooltip: { trigger: "axis", ...tooltipStyle },
-    legend: { data: allKeywords, textStyle: { color: textColor }, top: 0 },
+    legend: { data: allKeywords, textStyle: { color: textColor, fontFamily: chartFont }, top: 0 },
     grid: { left: "3%", right: "3%", bottom: "3%", top: "40px", containLabel: true },
     xAxis: {
       type: "category",
       data: allDates,
       axisLine: { lineStyle: { color: gridColor } },
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     yAxis: {
       type: "value",
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     series: dailySeries,
@@ -224,7 +226,7 @@ export function Analytics() {
   const donutCommon = {
     backgroundColor: "transparent",
     tooltip: { trigger: "item" as const, ...tooltipStyle },
-    legend: { orient: "vertical" as const, right: "0%", top: "center", textStyle: { color: textColor, fontSize: 11 } },
+    legend: { orient: "vertical" as const, right: "0%", top: "center", textStyle: { color: textColor, fontSize: 11, fontFamily: chartFont } },
   }
 
   const keywordDonutOption = {
@@ -261,13 +263,13 @@ export function Analytics() {
     grid: { left: "3%", right: "6%", top: "3%", bottom: "3%", containLabel: true },
     xAxis: {
       type: "value" as const,
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     yAxis: {
       type: "category" as const,
       data: s.publisher.slice(0, 15).map((p) => p.publisher).reverse(),
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       axisLine: { lineStyle: { color: gridColor } },
     },
     color: [accentColor],
@@ -290,12 +292,12 @@ export function Analytics() {
       type: "category" as const,
       data: allHours.map((h) => `${h}시`),
       axisLine: { lineStyle: { color: gridColor } },
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     yAxis: {
       type: "value" as const,
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     color: [accentColor],
@@ -321,12 +323,12 @@ export function Analytics() {
       type: "category" as const,
       data: allHours.map((h) => `${h}시`),
       axisLine: { lineStyle: { color: gridColor } },
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     yAxis: {
       type: "value" as const,
-      axisLabel: { color: textColor, fontSize: 11 },
+      axisLabel: { color: textColor, fontSize: 11, fontFamily: chartFont },
       splitLine: { lineStyle: { color: gridColor } },
     },
     color: ["#f59e0b"],

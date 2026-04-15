@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { MutableRefObject } from "react"
-import { ExternalLink, Newspaper, Search, Star } from "lucide-react"
+import { ExternalLink, Newspaper, Search, Star, ArrowUp, ArrowDown, Link as LinkIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { fetchNews, toggleScrap, fetchScrapIds } from "@/hooks/useApi"
+import { fetchNews, toggleScrap, fetchScrapIds, openUrl } from "@/hooks/useApi"
 import { highlightText } from "@/lib/highlight"
 import naverImg from "@/assets/naver.jpg"
 import daumImg from "@/assets/daum.jpeg"
@@ -35,7 +35,12 @@ interface NewsArticle {
 
 const PAGE_SIZE = 20
 
-export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => void) | null> }) {
+export function NewsList({ refreshRef, sessionId, sessionLabel, onClearSessionFilter }: {
+  refreshRef?: MutableRefObject<(() => void) | null>
+  sessionId?: number
+  sessionLabel?: string
+  onClearSessionFilter?: () => void
+}) {
   const [articles, setArticles] = useState<NewsArticle[]>([])
   const [keyword, setKeyword] = useState("")
   const [portal, setPortal] = useState("")
@@ -44,8 +49,11 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
   const [dateTo, setDateTo] = useState("")
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(true)
+  const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [scrapIds, setScrapIds] = useState<Set<number>>(new Set())
+  const [sortBy, setSortBy] = useState("crawled_at")
+  const [sortOrder, setSortOrder] = useState("desc")
   const offsetRef = useRef(0)
   const loadingRef = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -64,11 +72,15 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
         search: searchText || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        session_id: sessionId,
         limit: PAGE_SIZE,
         offset,
       })
-      const result = data as { items?: NewsArticle[] }
+      const result = data as { items?: NewsArticle[]; total?: number }
       const items = result.items ?? []
+      if (reset) setTotal(result.total ?? items.length)
       if (reset) {
         setArticles(items)
         offsetRef.current = items.length
@@ -83,7 +95,7 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
       loadingRef.current = false
       setLoading(false)
     }
-  }, [keyword, portal, searchText, dateFrom, dateTo])
+  }, [keyword, portal, searchText, dateFrom, dateTo, sortBy, sortOrder, sessionId])
 
   // Load scrap ids
   useEffect(() => {
@@ -109,7 +121,7 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
     setHasMore(true)
     loadArticles(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyword, portal, searchText, dateFrom, dateTo])
+  }, [keyword, portal, searchText, dateFrom, dateTo, sortBy, sortOrder, sessionId])
 
   // Expose refresh function via ref
   useEffect(() => {
@@ -185,7 +197,44 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
           className="h-8 text-sm bg-secondary border-border w-[140px]"
           title="종료일"
         />
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="h-8 rounded-md border border-border bg-secondary px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="crawled_at">수집일순</option>
+          <option value="published_at">발행일순</option>
+        </select>
+        <button
+          onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
+          className="h-8 w-8 rounded-md border border-border bg-secondary flex items-center justify-center text-foreground hover:bg-accent transition-colors"
+          title={sortOrder === "desc" ? "내림차순 (클릭: 오름차순)" : "오름차순 (클릭: 내림차순)"}
+        >
+          {sortOrder === "desc" ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
+        </button>
       </div>
+
+      {/* Result count */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs text-muted-foreground">
+          검색결과 <span className="font-semibold text-foreground">{total.toLocaleString()}</span>건
+        </span>
+      </div>
+
+      {/* Session filter indicator */}
+      {sessionId && (
+        <div className="flex items-center gap-2 mb-2">
+          <Badge className="text-xs bg-primary/10 text-primary border border-primary/20">
+            {sessionLabel || `회차 #${sessionId}`}
+          </Badge>
+          <button
+            onClick={onClearSessionFilter}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            필터 해제
+          </button>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -256,20 +305,18 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
                   </div>
 
                   {/* Title */}
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-start gap-1 text-sm font-medium text-foreground hover:text-primary transition-colors mb-1"
+                  <button
+                    onClick={() => openUrl(article.url)}
+                    className="group flex items-start gap-1 text-sm font-medium text-foreground hover:text-primary transition-colors mb-1 text-left"
                   >
-                    <span className="line-clamp-2">
+                    <span>
                       {highlightText(article.title, [
                         { term: article.keyword ?? "", styleKey: "keyword" },
                         { term: searchText, styleKey: "search" },
                       ])}
                     </span>
                     <ExternalLink className="h-3 w-3 flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </a>
+                  </button>
 
                   {/* Description */}
                   {article.description && (
@@ -285,9 +332,13 @@ export function NewsList({ refreshRef }: { refreshRef?: MutableRefObject<(() => 
                   )}
 
                   {/* Meta */}
-                  <div className="flex gap-3 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     {article.publisher && <span>{article.publisher}</span>}
                     {article.published_at && <span>{article.published_at}</span>}
+                    <span className="flex items-center gap-0.5 truncate max-w-[200px]" title={article.url}>
+                      <LinkIcon className="h-2.5 w-2.5 flex-shrink-0" />
+                      {(() => { try { return new URL(article.url).hostname } catch { return article.url } })()}
+                    </span>
                   </div>
                 </div>
               </div>

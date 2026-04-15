@@ -26,7 +26,8 @@ const INTERVALS = [
 ]
 
 function todayString() {
-  return new Date().toISOString().slice(0, 10)
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 export interface SidebarStatus {
@@ -43,12 +44,14 @@ interface SidebarProps {
     portals: string[]
     interval: number
     search_from: string
+    mode: string
   }) => void
   onStopCrawl: () => void
   onRunOnce: (data: {
     keywords: string[]
     portals: string[]
     search_from: string
+    mode: string
   }) => void
   onWarning?: (message: string) => void
   onReset?: () => void
@@ -60,6 +63,7 @@ export function Sidebar({ status, onStartCrawl, onStopCrawl, onRunOnce, onWarnin
   const [portals, setPortals] = useState<string[]>(["naver", "daum", "nate"])
   const [searchFrom, setSearchFrom] = useState(todayString())
   const [interval, setInterval] = useState(15)
+  const [mode, setMode] = useState<"AND" | "OR">("OR")
 
   function addKeyword() {
     const kw = keywordInput.trim()
@@ -87,12 +91,12 @@ export function Sidebar({ status, onStartCrawl, onStopCrawl, onRunOnce, onWarnin
 
   function handleStart() {
     if (!validate()) return
-    onStartCrawl({ keywords, portals, interval, search_from: searchFrom })
+    onStartCrawl({ keywords, portals, interval, search_from: searchFrom, mode })
   }
 
   function handleRunOnce() {
     if (!validate()) return
-    onRunOnce({ keywords, portals, search_from: searchFrom })
+    onRunOnce({ keywords, portals, search_from: searchFrom, mode })
   }
 
   return (
@@ -147,6 +151,37 @@ export function Sidebar({ status, onStartCrawl, onStopCrawl, onRunOnce, onWarnin
                 키워드를 추가하세요
               </p>
             )}
+          </div>
+        </section>
+
+        {/* Keyword Mode */}
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            키워드 조건
+          </p>
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setMode("AND")}
+              className={[
+                "flex-1 h-7 rounded-md text-xs font-medium transition-all border-2",
+                mode === "AND"
+                  ? "bg-primary/20 text-primary border-primary shadow-[0_0_12px_hsl(var(--primary)/0.5)]"
+                  : "bg-transparent text-muted-foreground/50 border-transparent hover:text-muted-foreground hover:border-border/50",
+              ].join(" ")}
+            >
+              AND (모두 포함)
+            </button>
+            <button
+              onClick={() => setMode("OR")}
+              className={[
+                "flex-1 h-7 rounded-md text-xs font-medium transition-all border-2",
+                mode === "OR"
+                  ? "bg-primary/20 text-primary border-primary shadow-[0_0_12px_hsl(var(--primary)/0.5)]"
+                  : "bg-transparent text-muted-foreground/50 border-transparent hover:text-muted-foreground hover:border-border/50",
+              ].join(" ")}
+            >
+              OR (각각 검색)
+            </button>
           </div>
         </section>
 

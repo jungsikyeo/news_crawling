@@ -25,6 +25,8 @@ function App() {
   const [crawlStatus, setCrawlStatus] = useState<SidebarStatus>({ running: false })
   const [modal, setModal] = useState<ModalState>({ open: false, type: "info", title: "", message: "" })
   const [activeTab, setActiveTab] = useState("articles")
+  const [sessionFilter, setSessionFilter] = useState<number | undefined>(undefined)
+  const [sessionLabel, setSessionLabel] = useState("")
   const runOnceWaiting = useRef(false)
   const prevRunning = useRef(false)
   const newsRefresh = useRef<(() => void) | null>(null)
@@ -111,11 +113,18 @@ function App() {
     return () => clearInterval(id)
   }, [polling, pollStatus])
 
+  function handleViewSession(sessionId: number, label: string) {
+    setSessionFilter(sessionId)
+    setSessionLabel(label)
+    setActiveTab("articles")
+  }
+
   async function handleStartCrawl(data: {
     keywords: string[]
     portals: string[]
     interval: number
     search_from: string
+    mode: string
   }) {
     try {
       await startCrawl(data)
@@ -142,6 +151,7 @@ function App() {
     keywords: string[]
     portals: string[]
     search_from: string
+    mode: string
   }) {
     try {
       await runOnce(data)
@@ -197,7 +207,7 @@ function App() {
             </div>
 
             <TabsContent value="articles" className="animate-fade-up">
-              <NewsList refreshRef={newsRefresh} />
+              <NewsList refreshRef={newsRefresh} sessionId={sessionFilter} sessionLabel={sessionLabel} onClearSessionFilter={() => { setSessionFilter(undefined); setSessionLabel("") }} />
             </TabsContent>
 
             <TabsContent value="analytics" className="animate-fade-up">
@@ -209,7 +219,7 @@ function App() {
             </TabsContent>
 
             <TabsContent value="history" className="animate-fade-up">
-              <History />
+              <History onViewSession={handleViewSession} />
             </TabsContent>
           </Tabs>
         </div>

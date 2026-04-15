@@ -12,21 +12,26 @@ class CrawlStartRequest(BaseModel):
     portals: List[str]
     interval_minutes: int
     start_date: Optional[str] = ""
+    mode: Optional[str] = "OR"
 
 
 class CrawlRunOnceRequest(BaseModel):
     keywords: List[str]
     portals: List[str]
     start_date: Optional[str] = ""
+    mode: Optional[str] = "OR"
 
 
 @router.post("/start")
 def start_crawl(req: CrawlStartRequest, request: Request):
     scheduler = request.app.state.scheduler
     conn = get_connection()
-    save_search_history(conn, ",".join(req.keywords), ",".join(req.portals), req.interval_minutes)
+    history_id = save_search_history(conn, ",".join(req.keywords), ",".join(req.portals),
+                                     req.interval_minutes, req.mode or "OR")
     conn.close()
-    scheduler.start_crawling(req.keywords, req.portals, req.interval_minutes, start_date=req.start_date or "")
+    scheduler.start_crawling(req.keywords, req.portals, req.interval_minutes,
+                             start_date=req.start_date or "",
+                             mode=req.mode or "OR", history_id=history_id)
     return {"status": "started", "keywords": req.keywords, "portals": req.portals}
 
 
@@ -41,9 +46,11 @@ def stop_crawl(request: Request):
 def run_once(req: CrawlRunOnceRequest, request: Request):
     scheduler = request.app.state.scheduler
     conn = get_connection()
-    save_search_history(conn, ",".join(req.keywords), ",".join(req.portals), 0)
+    history_id = save_search_history(conn, ",".join(req.keywords), ",".join(req.portals),
+                                     0, req.mode or "OR")
     conn.close()
-    scheduler.run_once(req.keywords, req.portals, start_date=req.start_date or "")
+    scheduler.run_once(req.keywords, req.portals, start_date=req.start_date or "",
+                       mode=req.mode or "OR", history_id=history_id)
     return {"status": "running"}
 
 

@@ -8,6 +8,10 @@ export interface NewsParams {
   date_to?: string
   limit?: number
   offset?: number
+  sort_by?: string
+  sort_order?: string
+  session_id?: number
+  history_id?: number
 }
 
 export interface CrawlStartData {
@@ -15,12 +19,14 @@ export interface CrawlStartData {
   portals: string[]
   interval: number
   search_from?: string
+  mode?: string
 }
 
 export interface RunOnceData {
   keywords: string[]
   portals: string[]
   search_from?: string
+  mode?: string
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -41,6 +47,10 @@ export async function fetchNews(params: NewsParams = {}) {
   if (params.date_to) query.set("date_to", params.date_to)
   if (params.limit != null) query.set("limit", String(params.limit))
   if (params.offset != null) query.set("offset", String(params.offset))
+  if (params.sort_by) query.set("sort_by", params.sort_by)
+  if (params.sort_order) query.set("sort_order", params.sort_order)
+  if (params.session_id != null) query.set("session_id", String(params.session_id))
+  if (params.history_id != null) query.set("history_id", String(params.history_id))
   const qs = query.toString()
   return apiFetch<unknown>(`/api/news${qs ? `?${qs}` : ""}`)
 }
@@ -58,6 +68,7 @@ export async function startCrawl(data: CrawlStartData) {
       portals: data.portals,
       interval_minutes: data.interval,
       start_date: data.search_from ?? "",
+      mode: data.mode ?? "OR",
     }),
   })
 }
@@ -74,6 +85,7 @@ export async function runOnce(data: RunOnceData) {
       keywords: data.keywords,
       portals: data.portals,
       start_date: data.search_from ?? "",
+      mode: data.mode ?? "OR",
     }),
   })
 }
@@ -105,14 +117,42 @@ export async function deleteHistory(id: number | string) {
   return apiFetch<unknown>(`/api/history/${id}`, { method: "DELETE" })
 }
 
-export async function exportCsv(): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/news/export`)
+export async function openUrl(url: string) {
+  return apiFetch<unknown>("/api/news/open-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  })
+}
+
+export async function fetchSessions(historyId: number) {
+  return apiFetch<unknown>(`/api/history/${historyId}/sessions`)
+}
+
+export interface ExportParams {
+  session_id?: number
+  history_id?: number
+  keyword?: string
+  date_from?: string
+  date_to?: string
+}
+
+export async function exportCsv(params: ExportParams = {}): Promise<void> {
+  const query = new URLSearchParams()
+  if (params.session_id != null) query.set("session_id", String(params.session_id))
+  if (params.history_id != null) query.set("history_id", String(params.history_id))
+  if (params.keyword) query.set("keyword", params.keyword)
+  if (params.date_from) query.set("date_from", params.date_from)
+  if (params.date_to) query.set("date_to", params.date_to)
+  const qs = query.toString()
+  const res = await fetch(`${BASE_URL}/api/news/export${qs ? `?${qs}` : ""}`)
   if (!res.ok) throw new Error(`Export failed: ${res.status}`)
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `news_export_${new Date().toISOString().slice(0, 10)}.csv`
+  const now = new Date()
+  a.download = `news_export_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}.csv`
   document.body.appendChild(a)
   a.click()
   a.remove()

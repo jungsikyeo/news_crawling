@@ -1,8 +1,10 @@
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from typing import Optional
 import csv
 import io
+import webbrowser
 from datetime import datetime
 
 from db.database import get_connection, get_news_list, get_news_count, reset_all_data, toggle_scrap, get_scrap_ids, get_scrapped_news
@@ -14,11 +16,17 @@ router = APIRouter()
 def list_news(keyword: Optional[str] = None, portal: Optional[str] = None,
               limit: int = 50, offset: int = 0,
               search: Optional[str] = None,
-              date_from: Optional[str] = None, date_to: Optional[str] = None):
+              date_from: Optional[str] = None, date_to: Optional[str] = None,
+              sort_by: Optional[str] = "crawled_at", sort_order: Optional[str] = "desc",
+              session_id: Optional[int] = None, history_id: Optional[int] = None):
     conn = get_connection()
     items = get_news_list(conn, keyword=keyword, portal=portal, limit=limit, offset=offset,
-                          search=search, date_from=date_from, date_to=date_to)
-    total = get_news_count(conn)
+                          search=search, date_from=date_from, date_to=date_to,
+                          sort_by=sort_by or "crawled_at", sort_order=sort_order or "desc",
+                          session_id=session_id, history_id=history_id)
+    total = get_news_count(conn, keyword=keyword, portal=portal, search=search,
+                          date_from=date_from, date_to=date_to,
+                          session_id=session_id, history_id=history_id)
     conn.close()
     return {
         "total": total,
@@ -35,19 +43,28 @@ def news_count():
 
 
 @router.get("/export")
-def export_csv():
+def export_csv(keyword: Optional[str] = None, session_id: Optional[int] = None,
+               history_id: Optional[int] = None,
+               date_from: Optional[str] = None, date_to: Optional[str] = None):
     conn = get_connection()
-    items = get_news_list(conn, limit=50000)
+    items = get_news_list(conn, keyword=keyword, limit=50000,
+                          session_id=session_id, history_id=history_id,
+                          date_from=date_from, date_to=date_to)
     conn.close()
 
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=[
-        "id", "title", "url", "description", "publisher",
-        "published_at", "keyword", "portal", "crawled_at", "portals",
+        "title", "published_at", "publisher", "url",
     ])
     writer.writeheader()
     for item in items:
-        writer.writerow({k: dict(item).get(k, "") for k in writer.fieldnames})
+        row = dict(item)
+        writer.writerow({
+            "title": row.get("title", ""),
+            "published_at": row.get("published_at", ""),
+            "publisher": row.get("publisher", ""),
+            "url": row.get("url", ""),
+        })
 
     output.seek(0)
     filename = f"newsdesk_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -56,6 +73,16 @@ def export_csv():
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+class OpenUrlRequest(BaseModel):
+    url: str
+
+
+@router.post("/open-url")
+def open_url(req: OpenUrlRequest):
+    webbrowser.open(req.url)
+    return {"status": "opened"}
 
 
 @router.post("/scrap/{news_id}")
