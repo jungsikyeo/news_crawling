@@ -41,6 +41,7 @@ export default function ReportGenerator() {
   const [categories, setCategories] = useState("")
   const [status, setStatus] = useState<ReportStatus | null>(null)
   const [reports, setReports] = useState<ReportFile[]>([])
+  const [refreshing, setRefreshing] = useState(false)
   const [polling, setPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
@@ -243,8 +244,17 @@ export default function ReportGenerator() {
             <FileText className="h-4 w-4 text-primary" />
             생성된 보고서
           </h3>
-          <Button variant="ghost" size="sm" onClick={loadReports} className="h-7 px-2">
-            <RefreshCw className="h-3.5 w-3.5" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={async () => {
+              setRefreshing(true)
+              await loadReports()
+              setTimeout(() => setRefreshing(false), 600)
+            }}
+            className="h-7 px-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 transition-transform ${refreshing ? "animate-spin" : ""}`} />
           </Button>
         </div>
 
