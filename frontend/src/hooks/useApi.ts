@@ -174,3 +174,53 @@ export async function fetchScrapIds() {
 export async function fetchScraps(limit = 100, offset = 0) {
   return apiFetch<unknown>(`/api/news/scraps?limit=${limit}&offset=${offset}`)
 }
+
+// === Report types ===
+
+export interface ReportStatus {
+  is_generating: boolean
+  status: string
+  progress_detail: string
+  last_error: string | null
+  last_report_path: string | null
+  cli_available: boolean
+  cli_message: string
+}
+
+export interface ReportFile {
+  filename: string
+  size: number
+  created_at: string
+}
+
+// === Report functions ===
+
+export async function generateReport(date?: string, keyword?: string) {
+  return apiFetch<{ status?: string; error?: string }>("/api/report/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: date ?? null, keyword: keyword ?? null }),
+  })
+}
+
+export async function fetchReportStatus() {
+  return apiFetch<ReportStatus>("/api/report/status")
+}
+
+export async function fetchReportList() {
+  return apiFetch<{ reports: ReportFile[] }>("/api/report/list")
+}
+
+export async function downloadReport(filename: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/report/download/${encodeURIComponent(filename)}`)
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

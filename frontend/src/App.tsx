@@ -5,6 +5,7 @@ import { NewsList } from "@/components/NewsList"
 import { Analytics } from "@/components/Analytics"
 import { History } from "@/components/History"
 import { Scraps } from "@/components/Scraps"
+import ReportGenerator from "@/components/ReportGenerator"
 import { ThemeSelector } from "@/components/ThemeSelector"
 import { Modal } from "@/components/Modal"
 import type { ModalType } from "@/components/Modal"
@@ -202,6 +203,7 @@ function App() {
                 <TabsTrigger value="analytics">통계 분석</TabsTrigger>
                 <TabsTrigger value="scraps">스크랩</TabsTrigger>
                 <TabsTrigger value="history">히스토리</TabsTrigger>
+                <TabsTrigger value="report">보고서</TabsTrigger>
               </TabsList>
               <ThemeSelector />
             </div>
@@ -220,6 +222,10 @@ function App() {
 
             <TabsContent value="history" className="animate-fade-up">
               <History onViewSession={handleViewSession} />
+            </TabsContent>
+
+            <TabsContent value="report" className="flex-1 overflow-hidden">
+              <ReportGenerator />
             </TabsContent>
           </Tabs>
         </div>
