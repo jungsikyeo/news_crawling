@@ -181,16 +181,30 @@ class ReportGenerator:
             self.progress_detail = f"기사 분류 완료 ({len(categories)}개 카테고리)"
             logger.info(f"[보고서] 분류 완료: {categories}")
 
-            # --- Step 4: 카테고리별 요약 ---
+            # --- Step 4: 카테고리별 요약 (병렬) ---
             self.status = "ai_summarizing"
-            category_summaries: Dict[str, str] = {}
-            for i, (cat_name, cat_articles) in enumerate(classification.items(), 1):
-                self.progress_detail = f"카테고리 요약 중... ({i}/{len(categories)}) - {cat_name}"
-                logger.info(f"[보고서] Step 4: 카테고리 요약 - {cat_name} ({len(cat_articles)}건)")
+            self.progress_detail = f"{len(categories)}개 카테고리 동시 요약 중..."
+            logger.info(f"[보고서] Step 4: 카테고리 요약 (병렬 {len(categories)}개)")
 
-                summary = summarize_category(cat_name, cat_articles)
-                if summary:
-                    category_summaries[cat_name] = summary
+            category_summaries: Dict[str, str] = {}
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            def _summarize(cat_name: str, cat_articles: List[Dict]) -> tuple:
+                return cat_name, summarize_category(cat_name, cat_articles)
+
+            with ThreadPoolExecutor(max_workers=len(categories)) as executor:
+                futures = {
+                    executor.submit(_summarize, name, arts): name
+                    for name, arts in classification.items()
+                }
+                done_count = 0
+                for future in as_completed(futures):
+                    done_count += 1
+                    cat_name, summary = future.result()
+                    if summary:
+                        category_summaries[cat_name] = summary
+                    self.progress_detail = f"카테고리 요약 중... ({done_count}/{len(categories)}) - {cat_name} 완료"
+                    logger.info(f"[보고서] 카테고리 요약 완료: {cat_name}")
 
             if not category_summaries:
                 raise RuntimeError("카테고리 요약을 하나도 생성하지 못했습니다.")
