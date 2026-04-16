@@ -109,7 +109,8 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
         if "HOME" not in env:
             env["HOME"] = os.path.expanduser("~")
 
-        logger.info(f"Claude CLI 호출: path={path}, prompt_len={len(prompt)}, input_len={len(input_data)}")
+        home_dir = env.get("HOME", os.path.expanduser("~"))
+        logger.info(f"Claude CLI 호출: path={path}, prompt_len={len(prompt)}, input_len={len(input_data)}, HOME={home_dir}")
         result = subprocess.run(
             [path, "-p", prompt],
             input=input_data,
@@ -117,9 +118,12 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
             text=True,
             timeout=timeout,
             env=env,
+            cwd=home_dir,  # 워킹 디렉토리 명시
         )
         if result.returncode != 0:
-            logger.error(f"Claude CLI 오류 (exit {result.returncode}): {result.stderr.strip()[:500]}")
+            logger.error(f"Claude CLI 오류 (exit {result.returncode})")
+            logger.error(f"  stderr: {result.stderr.strip()[:1000]}")
+            logger.error(f"  stdout: {result.stdout.strip()[:500]}")
             return None
         logger.info(f"Claude CLI 응답: {len(result.stdout)} chars")
         return result.stdout.strip()
@@ -127,7 +131,7 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
         logger.error(f"Claude CLI 호출 타임아웃 ({timeout}초)")
         return None
     except Exception as e:
-        logger.error(f"Claude CLI 호출 중 오류: {e}")
+        logger.error(f"Claude CLI 호출 중 오류: {e}", exc_info=True)
         return None
 
 
@@ -155,20 +159,22 @@ def classify_articles(articles: List[Dict]) -> Optional[Dict]:
         logger.warning("분류할 기사가 없습니다.")
         return None
 
-    # 토큰 절약을 위해 content 500자, description 300자까지만 전달
+    # 분류에는 제목+언론사만으로 충분. 기사가 많으면 본문 미포함으로 토큰 절약
     compact = []
+    include_preview = len(articles) <= 30  # 30건 이하일 때만 본문 미리보기 포함
     for i, a in enumerate(articles):
         item = {
             "id": i,
             "title": a.get("title", ""),
             "publisher": a.get("publisher", ""),
         }
-        content = a.get("content", "")
-        description = a.get("description", "") or a.get("preview", "")
-        if content:
-            item["content"] = content[:500]
-        if description:
-            item["description"] = description[:300]
+        if include_preview:
+            content = a.get("content", "")
+            description = a.get("description", "") or a.get("preview", "")
+            if content:
+                item["preview"] = content[:200]
+            elif description:
+                item["preview"] = description[:200]
         compact.append(item)
 
     prompt = (
