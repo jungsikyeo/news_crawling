@@ -2,12 +2,57 @@
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Claude CLI 경로 캐시
+_claude_path_cache: Optional[str] = None
+
+
+def _find_claude_path() -> Optional[str]:
+    """Claude CLI 경로를 찾는다. shutil.which 실패 시 일반적인 설치 경로도 탐색."""
+    global _claude_path_cache
+    if _claude_path_cache and os.path.isfile(_claude_path_cache):
+        return _claude_path_cache
+
+    # 1차: shutil.which
+    path = shutil.which("claude")
+    if path:
+        _claude_path_cache = path
+        return path
+
+    # 2차: 일반적인 설치 경로 탐색 (nvm, homebrew, global npm 등)
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".nvm/versions/node"),  # nvm 하위 검색
+        "/usr/local/bin",
+        os.path.join(home, ".local/bin"),
+        os.path.join(home, ".bun/bin"),
+    ]
+
+    # nvm 경로는 버전별로 있으므로 하위 탐색
+    nvm_base = os.path.join(home, ".nvm/versions/node")
+    if os.path.isdir(nvm_base):
+        for version_dir in sorted(os.listdir(nvm_base), reverse=True):
+            candidate = os.path.join(nvm_base, version_dir, "bin", "claude")
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                _claude_path_cache = candidate
+                logger.info(f"Claude CLI 발견 (nvm): {candidate}")
+                return candidate
+
+    for base in candidates:
+        candidate = os.path.join(base, "claude")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            _claude_path_cache = candidate
+            logger.info(f"Claude CLI 발견: {candidate}")
+            return candidate
+
+    return None
 
 
 def check_cli_available() -> Tuple[bool, str]:
@@ -17,7 +62,7 @@ def check_cli_available() -> Tuple[bool, str]:
         (True, version_string) — CLI가 정상 동작할 때
         (False, error_message) — CLI가 없거나 실행 실패 시
     """
-    path = shutil.which("claude")
+    path = _find_claude_path()
     if not path:
         return False, "Claude CLI가 설치되어 있지 않습니다. 'npm install -g @anthropic-ai/claude-code' 로 설치하세요."
 
@@ -49,9 +94,9 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
     Returns:
         Claude 응답 텍스트, 실패 시 None
     """
-    path = shutil.which("claude")
+    path = _find_claude_path()
     if not path:
-        logger.error("Claude CLI를 찾을 수 없습니다.")
+        logger.error("Claude CLI를 찾을 수 없습니다. PATH 및 일반 설치 경로 모두 검색 실패.")
         return None
 
     try:
