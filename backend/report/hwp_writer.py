@@ -270,9 +270,58 @@ _HWPX_NS = {
     "hs": "http://www.hancom.co.kr/hwpml/2011/section",
     "hc": "http://www.hancom.co.kr/hwpml/2011/core",
 }
-# 본문 기본 스타일 (템플릿에서 가장 흔한 조합)
-_DEFAULT_PARA_PR = "26"
-_DEFAULT_CHAR_PR = "9"
+# 원본 템플릿에서 추출한 스타일 매핑 (paraPrIDRef, charPrIDRef)
+_STYLES = {
+    "date":         ("20", "17"),   # 날짜
+    "title":        ("19", "13"),   # 정책 보도 일일 종합
+    "subtitle":     ("18", "14"),   # 종합·경제지 12사, 방송 7사
+    "category":     ("13", "7"),    # 카테고리 헤더 (굵은 제목)
+    "section":      ("17", "18"),   # □ 소제목
+    "bullet":       ("17", "19"),   # ㅇ 본문 불릿
+    "sub_bullet":   ("27", "9"),    # - 서브 불릿
+    "editorial_h":  ("21", "22"),   # 금일 사설 헤더
+    "editorial":    ("22", "26"),   # ￭ 사설 불릿
+    "eval":         ("39", "19"),   # (평가)
+    "opinion":      ("61", "31"),   # (사설)
+    "blank":        ("26", "9"),    # 빈 줄
+    "body":         ("26", "9"),    # 일반 본문
+}
+
+
+def _detect_style(line: str) -> tuple:
+    """텍스트 줄의 내용을 분석하여 적절한 HWPX 스타일을 반환한다."""
+    stripped = line.strip()
+
+    if not stripped:
+        return _STYLES["blank"]
+    if stripped.startswith("정책 보도 일일 종합"):
+        return _STYLES["title"]
+    if stripped.startswith("종합") and "방송" in stripped:
+        return _STYLES["subtitle"]
+    if stripped.startswith("국민소통실"):
+        return _STYLES["subtitle"]
+    if "년" in stripped and "월" in stripped and "일" in stripped and len(stripped) < 30:
+        return _STYLES["date"]
+    if stripped.startswith("■"):
+        return _STYLES["editorial_h"]
+    if stripped.startswith("▶"):
+        return _STYLES["category"]
+    if stripped.startswith("□"):
+        return _STYLES["section"]
+    if stripped.startswith("￭"):
+        return _STYLES["editorial"]
+    if stripped.startswith("ㅇ") and "(평가)" in stripped:
+        return _STYLES["eval"]
+    if stripped.startswith("ㅇ") and "(사설)" in stripped:
+        return _STYLES["opinion"]
+    if stripped.startswith("ㅇ"):
+        return _STYLES["bullet"]
+    if stripped.startswith("-") or stripped.startswith("  -"):
+        return _STYLES["sub_bullet"]
+    if stripped.startswith("="):
+        return _STYLES["blank"]
+
+    return _STYLES["body"]
 
 
 def generate_hwpx_from_template(
@@ -283,7 +332,7 @@ def generate_hwpx_from_template(
 ) -> bool:
     """HWPX 템플릿의 section0.xml 본문을 교체하여 새 파일을 생성한다.
 
-    HWPX는 ZIP 안에 XML 파일들로 구성되어 본문 교체가 가능하다.
+    텍스트 내용을 분석하여 원본 템플릿의 스타일을 자동 매핑한다.
 
     Args:
         template_path: 템플릿 HWPX 파일 경로
@@ -305,10 +354,8 @@ def generate_hwpx_from_template(
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # 네임스페이스 등록 (출력 시 ns0 방지)
-        for prefix, uri in _HWPX_NS.items():
-            ET.register_namespace(prefix, uri)
-        # 추가 네임스페이스도 등록
-        _extra_ns = {
+        _all_ns = {
+            **_HWPX_NS,
             "ha": "http://www.hancom.co.kr/hwpml/2011/app",
             "hp10": "http://www.hancom.co.kr/hwpml/2016/paragraph",
             "hh": "http://www.hancom.co.kr/hwpml/2011/head",
@@ -322,13 +369,12 @@ def generate_hwpx_from_template(
             "epub": "http://www.idpf.org/2007/ops",
             "config": "urn:oasis:names:tc:opendocument:xmlns:config:1.0",
         }
-        for prefix, uri in _extra_ns.items():
+        for prefix, uri in _all_ns.items():
             ET.register_namespace(prefix, uri)
 
         # 1. 템플릿 ZIP에서 section0.xml 읽기
         with zipfile.ZipFile(template_path, "r") as zin:
             section_xml = zin.read("Contents/section0.xml")
-            all_files = zin.namelist()
 
         # 2. section0.xml 파싱
         root = ET.fromstring(section_xml)
@@ -349,19 +395,21 @@ def generate_hwpx_from_template(
         for p in root.findall(f"{{{hp_ns}}}p"):
             root.remove(p)
 
-        # 5. 보고서 텍스트를 paragraph로 변환
+        # 5. 보고서 텍스트를 스타일 매핑된 paragraph로 변환
         lines = report_text.split("\n")
         for i, line in enumerate(lines):
+            para_pr, char_pr = _detect_style(line)
+
             p_elem = ET.SubElement(root, f"{{{hp_ns}}}p")
             p_elem.set("id", str(i))
-            p_elem.set("paraPrIDRef", _DEFAULT_PARA_PR)
+            p_elem.set("paraPrIDRef", para_pr)
             p_elem.set("styleIDRef", "0")
             p_elem.set("pageBreak", "0")
             p_elem.set("columnBreak", "0")
             p_elem.set("merged", "0")
 
             run_elem = ET.SubElement(p_elem, f"{{{hp_ns}}}run")
-            run_elem.set("charPrIDRef", _DEFAULT_CHAR_PR)
+            run_elem.set("charPrIDRef", char_pr)
 
             # 첫 번째 paragraph에 secPr 넣기
             if i == 0 and sec_pr is not None:
@@ -379,8 +427,7 @@ def generate_hwpx_from_template(
                     if item == "Contents/section0.xml":
                         zout.writestr(item, new_section_xml.encode("utf-8"))
                     elif item == "Preview/PrvText.txt":
-                        # PrvText도 교체
-                        zout.writestr(item, report_text[:1024].encode("utf-8"))
+                        zout.writestr(item, report_text[:2048].encode("utf-8"))
                     else:
                         zout.writestr(item, zin.read(item))
 
