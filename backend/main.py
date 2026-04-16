@@ -32,6 +32,8 @@ from api.crawl import router as crawl_router
 from api.news import router as news_router
 from api.stats import router as stats_router
 from api.history import router as history_router
+from api.report import router as report_router
+from report.generator import ReportGenerator
 
 scheduler = CrawlScheduler()
 
@@ -40,6 +42,7 @@ scheduler = CrawlScheduler()
 async def lifespan(app: FastAPI):
     init_db()
     app.state.scheduler = scheduler
+    app.state.report_generator = ReportGenerator()
     yield
     scheduler.shutdown()
 
@@ -58,6 +61,7 @@ app.include_router(crawl_router, prefix="/api/crawl", tags=["crawl"])
 app.include_router(news_router, prefix="/api/news", tags=["news"])
 app.include_router(stats_router, prefix="/api/stats", tags=["stats"])
 app.include_router(history_router, prefix="/api/history", tags=["history"])
+app.include_router(report_router, prefix="/api/report", tags=["report"])
 
 # Serve React build if exists
 # PyInstaller 번들 환경에서는 _MEIPASS 기준, 개발 환경에서는 상대 경로
