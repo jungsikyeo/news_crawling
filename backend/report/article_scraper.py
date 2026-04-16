@@ -49,8 +49,8 @@ def _create_session() -> requests.Session:
 
 def _extract_text(soup: BeautifulSoup) -> str:
     """soup에서 본문 텍스트를 추출. 셀렉터 우선순위대로 시도 후 fallback."""
-    # script, style, iframe 태그 제거
-    for tag in soup.find_all(["script", "style", "iframe"]):
+    # script, style, iframe, noscript 태그 제거
+    for tag in soup.find_all(["script", "style", "iframe", "noscript"]):
         tag.decompose()
 
     # 셀렉터 우선순위대로 시도
@@ -58,7 +58,7 @@ def _extract_text(soup: BeautifulSoup) -> str:
         element = soup.select_one(selector)
         if element:
             text = element.get_text(separator="\n", strip=True)
-            if len(text) > 50:
+            if len(text) > 100:
                 return text[:MAX_CONTENT_LENGTH]
 
     # Fallback: 20자 초과 <p> 태그 수집
@@ -80,6 +80,7 @@ def _fetch_article_text(url: str, timeout: int = 15) -> str:
         session = _create_session()
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
+        resp.encoding = resp.apparent_encoding or "utf-8"
         soup = BeautifulSoup(resp.text, "lxml")
         return _extract_text(soup)
     except requests.exceptions.Timeout:
