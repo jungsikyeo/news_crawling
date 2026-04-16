@@ -26,7 +26,8 @@ def list_news(keyword: Optional[str] = None, portal: Optional[str] = None,
                           session_id=session_id, history_id=history_id)
     total = get_news_count(conn, keyword=keyword, portal=portal, search=search,
                           date_from=date_from, date_to=date_to,
-                          session_id=session_id, history_id=history_id)
+                          session_id=session_id, history_id=history_id,
+                          sort_by=sort_by or "crawled_at")
     conn.close()
     return {
         "total": total,

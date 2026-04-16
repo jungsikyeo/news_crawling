@@ -182,6 +182,14 @@ export function NewsList({ refreshRef, sessionId, sessionLabel, onClearSessionFi
             <SelectItem value="nate">네이트</SelectItem>
           </SelectContent>
         </Select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="h-8 rounded-md border border-border bg-secondary px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="crawled_at">수집일</option>
+          <option value="published_at">발행일</option>
+        </select>
         <Input
           type="date"
           value={dateFrom}
@@ -197,14 +205,6 @@ export function NewsList({ refreshRef, sessionId, sessionLabel, onClearSessionFi
           className="h-8 text-sm bg-secondary border-border w-[140px]"
           title="종료일"
         />
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="h-8 rounded-md border border-border bg-secondary px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="crawled_at">수집일순</option>
-          <option value="published_at">발행일순</option>
-        </select>
         <button
           onClick={() => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"))}
           className="h-8 w-8 rounded-md border border-border bg-secondary flex items-center justify-center text-foreground hover:bg-accent transition-colors"

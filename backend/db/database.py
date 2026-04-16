@@ -209,11 +209,12 @@ def get_news_list(conn: sqlite3.Connection, keyword: Optional[str] = None,
     if search:
         query += " AND (n.title LIKE ? OR n.description LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
+    date_col = f"n.{sort_by}"
     if date_from:
-        query += " AND DATE(n.crawled_at) >= ?"
+        query += f" AND DATE({date_col}) >= ?"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(n.crawled_at) <= ?"
+        query += f" AND DATE({date_col}) <= ?"
         params.append(date_to)
     if session_id:
         query += " AND n.session_id = ?"
@@ -221,7 +222,7 @@ def get_news_list(conn: sqlite3.Connection, keyword: Optional[str] = None,
     if history_id:
         query += " AND n.session_id IN (SELECT id FROM crawl_sessions WHERE history_id = ?)"
         params.append(history_id)
-    query += f" GROUP BY n.id ORDER BY n.{sort_by} {sort_order} LIMIT ? OFFSET ?"
+    query += f" GROUP BY n.id ORDER BY {date_col} {sort_order} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return conn.execute(query, params).fetchall()
 
@@ -229,7 +230,11 @@ def get_news_list(conn: sqlite3.Connection, keyword: Optional[str] = None,
 def get_news_count(conn: sqlite3.Connection, keyword: Optional[str] = None,
                    portal: Optional[str] = None, search: Optional[str] = None,
                    date_from: Optional[str] = None, date_to: Optional[str] = None,
-                   session_id: Optional[int] = None, history_id: Optional[int] = None) -> int:
+                   session_id: Optional[int] = None, history_id: Optional[int] = None,
+                   sort_by: str = "crawled_at") -> int:
+    if sort_by not in ("crawled_at", "published_at"):
+        sort_by = "crawled_at"
+    date_col = f"n.{sort_by}"
     query = "SELECT COUNT(*) FROM news n WHERE 1=1"
     params = []
     if keyword:
@@ -242,10 +247,10 @@ def get_news_count(conn: sqlite3.Connection, keyword: Optional[str] = None,
         query += " AND (n.title LIKE ? OR n.description LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
     if date_from:
-        query += " AND DATE(n.crawled_at) >= ?"
+        query += f" AND DATE({date_col}) >= ?"
         params.append(date_from)
     if date_to:
-        query += " AND DATE(n.crawled_at) <= ?"
+        query += f" AND DATE({date_col}) <= ?"
         params.append(date_to)
     if session_id:
         query += " AND n.session_id = ?"
