@@ -183,7 +183,7 @@ class ReportGenerator:
 
             # --- Step 4: 카테고리별 요약 (병렬) ---
             self.status = "ai_summarizing"
-            self.progress_detail = f"{len(categories)}개 카테고리 동시 요약 중..."
+            self.progress_detail = f"{len(categories)}개 카테고리 병렬 요약 중... ({', '.join(categories)})"
             logger.info(f"[보고서] Step 4: 카테고리 요약 (병렬 {len(categories)}개)")
 
             category_summaries: Dict[str, str] = {}
@@ -203,7 +203,7 @@ class ReportGenerator:
                     cat_name, summary = future.result()
                     if summary:
                         category_summaries[cat_name] = summary
-                    self.progress_detail = f"카테고리 요약 중... ({done_count}/{len(categories)}) - {cat_name} 완료"
+                    self.progress_detail = f"병렬 요약 완료 {done_count}/{len(categories)} — {cat_name} ✓"
                     logger.info(f"[보고서] 카테고리 요약 완료: {cat_name}")
 
             if not category_summaries:
