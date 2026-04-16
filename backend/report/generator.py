@@ -192,7 +192,7 @@ class ReportGenerator:
             def _summarize(cat_name: str, cat_articles: List[Dict]) -> tuple:
                 return cat_name, summarize_category(cat_name, cat_articles)
 
-            with ThreadPoolExecutor(max_workers=len(categories)) as executor:
+            with ThreadPoolExecutor(max_workers=min(len(categories), 5)) as executor:
                 futures = {
                     executor.submit(_summarize, name, arts): name
                     for name, arts in classification.items()
