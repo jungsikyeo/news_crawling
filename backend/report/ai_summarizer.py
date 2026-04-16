@@ -12,6 +12,43 @@ logger = logging.getLogger(__name__)
 
 # Claude CLI 경로 캐시
 _claude_path_cache: Optional[str] = None
+# 셸 환경변수 캐시
+_shell_env_cache: Optional[Dict[str, str]] = None
+
+
+def _get_shell_env() -> Dict[str, str]:
+    """사용자의 로그인 셸 환경변수를 가져온다.
+
+    uvicorn 등 데몬 프로세스에서는 os.environ이 축소되어 있어
+    claude CLI 인증에 필요한 환경변수가 누락될 수 있다.
+    셸을 통해 실제 사용자 환경을 가져온다.
+    """
+    global _shell_env_cache
+    if _shell_env_cache is not None:
+        return _shell_env_cache.copy()
+
+    try:
+        shell = os.environ.get("SHELL", "/bin/zsh")
+        result = subprocess.run(
+            [shell, "-l", "-c", "env"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            env = {}
+            for line in result.stdout.splitlines():
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    env[k] = v
+            if "HOME" in env and "PATH" in env:
+                _shell_env_cache = env
+                logger.info(f"셸 환경변수 로드 완료 ({len(env)}개 변수)")
+                return env.copy()
+    except Exception as e:
+        logger.warning(f"셸 환경변수 로드 실패: {e}")
+
+    # 폴백: 현재 프로세스 환경 사용
+    _shell_env_cache = os.environ.copy()
+    return _shell_env_cache.copy()
 
 
 def _find_claude_path() -> Optional[str]:
@@ -100,14 +137,11 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
         return None
 
     try:
-        # uvicorn 서브프로세스에서도 claude가 동작하도록 환경변수 보강
-        env = os.environ.copy()
+        # uvicorn에서 실행 시 사용자의 셸 환경변수를 가져와야 claude 인증이 동작함
+        env = _get_shell_env()
         claude_dir = os.path.dirname(path)
         if claude_dir not in env.get("PATH", ""):
             env["PATH"] = claude_dir + os.pathsep + env.get("PATH", "")
-        # HOME이 없으면 claude config 읽기 실패할 수 있음
-        if "HOME" not in env:
-            env["HOME"] = os.path.expanduser("~")
 
         home_dir = env.get("HOME", os.path.expanduser("~"))
         logger.info(f"Claude CLI 호출: path={path}, prompt_len={len(prompt)}, input_len={len(input_data)}, HOME={home_dir}")
