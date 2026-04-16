@@ -167,9 +167,9 @@ export default function ReportGenerator() {
           보고서 생성
         </h3>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-3 items-end">
-            <div className="flex flex-col gap-1.5 flex-1">
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-[140px_1fr_auto] gap-3 items-end">
+            <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">날짜</label>
               <Input
                 type="date"
@@ -178,16 +178,17 @@ export default function ReportGenerator() {
                 disabled={isGenerating}
               />
             </div>
-            <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-xs text-muted-foreground">카테고리 (선택)</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">
+                카테고리 <span className="text-muted-foreground/60">· 비우면 AI 자동 분류</span>
+              </label>
               <Input
                 type="text"
                 value={categories}
                 onChange={(e) => setCategories(e.target.value)}
-                placeholder="비우면 AI 자동 분류"
+                placeholder="예: 경제, 외교안보, 사회"
                 disabled={isGenerating}
               />
-              <p className="text-[10px] text-muted-foreground">콤마로 구분 (예: 경제, 외교안보, 사회)</p>
             </div>
             <Button
               onClick={handleGenerate}
