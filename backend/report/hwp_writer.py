@@ -261,6 +261,143 @@ def generate_hwp_from_template(
 
 
 # ---------------------------------------------------------------------------
+# HWPX 파일 생성 (XML 기반 — 본문 교체 가능)
+# ---------------------------------------------------------------------------
+
+# HWPX 네임스페이스
+_HWPX_NS = {
+    "hp": "http://www.hancom.co.kr/hwpml/2011/paragraph",
+    "hs": "http://www.hancom.co.kr/hwpml/2011/section",
+    "hc": "http://www.hancom.co.kr/hwpml/2011/core",
+}
+# 본문 기본 스타일 (템플릿에서 가장 흔한 조합)
+_DEFAULT_PARA_PR = "26"
+_DEFAULT_CHAR_PR = "9"
+
+
+def generate_hwpx_from_template(
+    template_path: str,
+    output_path: str,
+    report_text: str,
+    date_str: str,
+) -> bool:
+    """HWPX 템플릿의 section0.xml 본문을 교체하여 새 파일을 생성한다.
+
+    HWPX는 ZIP 안에 XML 파일들로 구성되어 본문 교체가 가능하다.
+
+    Args:
+        template_path: 템플릿 HWPX 파일 경로
+        output_path: 출력 HWPX 파일 경로
+        report_text: 보고서 텍스트
+        date_str: 날짜 문자열
+
+    Returns:
+        성공 시 True, 실패 시 False
+    """
+    import zipfile
+    import xml.etree.ElementTree as ET
+
+    if not os.path.exists(template_path):
+        logger.error(f"HWPX 템플릿 파일을 찾을 수 없습니다: {template_path}")
+        return False
+
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # 네임스페이스 등록 (출력 시 ns0 방지)
+        for prefix, uri in _HWPX_NS.items():
+            ET.register_namespace(prefix, uri)
+        # 추가 네임스페이스도 등록
+        _extra_ns = {
+            "ha": "http://www.hancom.co.kr/hwpml/2011/app",
+            "hp10": "http://www.hancom.co.kr/hwpml/2016/paragraph",
+            "hh": "http://www.hancom.co.kr/hwpml/2011/head",
+            "hhs": "http://www.hancom.co.kr/hwpml/2011/history",
+            "hm": "http://www.hancom.co.kr/hwpml/2011/master-page",
+            "hpf": "http://www.hancom.co.kr/schema/2011/hpf",
+            "dc": "http://purl.org/dc/elements/1.1/",
+            "opf": "http://www.idpf.org/2007/opf/",
+            "ooxmlchart": "http://www.hancom.co.kr/hwpml/2016/ooxmlchart",
+            "hwpunitchar": "http://www.hancom.co.kr/hwpml/2016/HwpUnitChar",
+            "epub": "http://www.idpf.org/2007/ops",
+            "config": "urn:oasis:names:tc:opendocument:xmlns:config:1.0",
+        }
+        for prefix, uri in _extra_ns.items():
+            ET.register_namespace(prefix, uri)
+
+        # 1. 템플릿 ZIP에서 section0.xml 읽기
+        with zipfile.ZipFile(template_path, "r") as zin:
+            section_xml = zin.read("Contents/section0.xml")
+            all_files = zin.namelist()
+
+        # 2. section0.xml 파싱
+        root = ET.fromstring(section_xml)
+        hp_ns = _HWPX_NS["hp"]
+
+        # 3. 첫 번째 <hp:p>에서 secPr(페이지 설정) 보존
+        first_p = root.find(f"{{{hp_ns}}}p")
+        sec_pr = None
+        if first_p is not None:
+            for run in first_p.findall(f"{{{hp_ns}}}run"):
+                sp = run.find(f"{{{hp_ns}}}secPr")
+                if sp is not None:
+                    sec_pr = sp
+                    run.remove(sp)
+                    break
+
+        # 4. 기존 paragraph 모두 제거
+        for p in root.findall(f"{{{hp_ns}}}p"):
+            root.remove(p)
+
+        # 5. 보고서 텍스트를 paragraph로 변환
+        lines = report_text.split("\n")
+        for i, line in enumerate(lines):
+            p_elem = ET.SubElement(root, f"{{{hp_ns}}}p")
+            p_elem.set("id", str(i))
+            p_elem.set("paraPrIDRef", _DEFAULT_PARA_PR)
+            p_elem.set("styleIDRef", "0")
+            p_elem.set("pageBreak", "0")
+            p_elem.set("columnBreak", "0")
+            p_elem.set("merged", "0")
+
+            run_elem = ET.SubElement(p_elem, f"{{{hp_ns}}}run")
+            run_elem.set("charPrIDRef", _DEFAULT_CHAR_PR)
+
+            # 첫 번째 paragraph에 secPr 넣기
+            if i == 0 and sec_pr is not None:
+                run_elem.insert(0, sec_pr)
+
+            t_elem = ET.SubElement(run_elem, f"{{{hp_ns}}}t")
+            t_elem.text = line
+
+        # 6. 수정된 XML을 새 ZIP으로 쓰기
+        new_section_xml = ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+        with zipfile.ZipFile(template_path, "r") as zin:
+            with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.namelist():
+                    if item == "Contents/section0.xml":
+                        zout.writestr(item, new_section_xml.encode("utf-8"))
+                    elif item == "Preview/PrvText.txt":
+                        # PrvText도 교체
+                        zout.writestr(item, report_text[:1024].encode("utf-8"))
+                    else:
+                        zout.writestr(item, zin.read(item))
+
+        logger.info(f"HWPX 보고서 생성 완료: {output_path} ({len(lines)}개 paragraph)")
+        return True
+
+    except Exception as e:
+        logger.error(f"HWPX 생성 실패: {e}", exc_info=True)
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return False
+
+
+# ---------------------------------------------------------------------------
 # 텍스트 보고서 저장 (폴백)
 # ---------------------------------------------------------------------------
 

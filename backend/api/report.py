@@ -48,7 +48,9 @@ def download_report(filename: str, request: Request):
     filepath = os.path.join(REPORTS_DIR, filename)
     if not os.path.isfile(filepath):
         return {"error": "파일을 찾을 수 없습니다.", "filename": filename}
-    if filename.endswith(".hwp"):
+    if filename.endswith(".hwpx"):
+        media_type = "application/hwp+zip"
+    elif filename.endswith(".hwp"):
         media_type = "application/x-hwp"
     else:
         media_type = "text/plain; charset=utf-8"

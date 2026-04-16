@@ -20,6 +20,7 @@ from report.ai_summarizer import (
 )
 from report.hwp_writer import (
     generate_hwp_from_template,
+    generate_hwpx_from_template,
     generate_text_report,
     save_text_report,
 )
@@ -255,23 +256,38 @@ class ReportGenerator:
                 category_details=category_summaries,
             )
 
-            # HWP 생성 시도 (템플릿이 있을 경우)
-            hwp_path = os.path.join(REPORTS_DIR, f"{base_name}.hwp")
-            template_path = os.path.join(TEMPLATE_DIR, "daily_report_template.hwp")
-            hwp_ok = False
-            if os.path.exists(template_path):
-                hwp_ok = generate_hwp_from_template(
-                    template_path=template_path,
-                    output_path=hwp_path,
+            # HWPX 생성 우선 시도 → HWP 폴백 → TXT 폴백
+            doc_ok = False
+            doc_path = ""
+
+            # 1) HWPX 시도
+            hwpx_template = os.path.join(TEMPLATE_DIR, "daily_report_template.hwpx")
+            if os.path.exists(hwpx_template):
+                doc_path = os.path.join(REPORTS_DIR, f"{base_name}.hwpx")
+                doc_ok = generate_hwpx_from_template(
+                    template_path=hwpx_template,
+                    output_path=doc_path,
                     report_text=report_text,
                     date_str=date_str,
                 )
 
-            # TXT는 항상 저장 (참조용 또는 HWP 폴백)
+            # 2) HWPX 실패 시 HWP 시도
+            if not doc_ok:
+                hwp_template = os.path.join(TEMPLATE_DIR, "daily_report_template.hwp")
+                if os.path.exists(hwp_template):
+                    doc_path = os.path.join(REPORTS_DIR, f"{base_name}.hwp")
+                    doc_ok = generate_hwp_from_template(
+                        template_path=hwp_template,
+                        output_path=doc_path,
+                        report_text=report_text,
+                        date_str=date_str,
+                    )
+
+            # TXT는 항상 저장 (참조용 또는 폴백)
             txt_path = os.path.join(REPORTS_DIR, f"{base_name}.txt")
             save_text_report(output_path=txt_path, report_text=report_text)
 
-            self.last_report_path = hwp_path if hwp_ok else txt_path
+            self.last_report_path = doc_path if doc_ok else txt_path
             self.status = "completed"
             self.progress_detail = f"보고서 생성 완료: {os.path.basename(self.last_report_path)}"
             logger.info(f"[보고서] 생성 완료: {self.last_report_path}")
