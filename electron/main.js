@@ -124,8 +124,15 @@ async function createWindow() {
     },
   });
 
+  const appTitle = `NewsDesk v${require("./package.json").version}`;
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL(BACKEND_URL);
+
+  // 페이지 로드 후 타이틀 고정
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.setTitle(appTitle);
+  });
+  mainWindow.on("page-title-updated", (e) => e.preventDefault());
 
   // 외부 링크(target="_blank")를 시스템 기본 브라우저에서 열기
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
