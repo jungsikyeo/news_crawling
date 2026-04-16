@@ -115,7 +115,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
-    title: "NewsDesk",
+    title: `NewsDesk v${require("./package.json").version}`,
     icon,
     webPreferences: {
       nodeIntegration: false,
