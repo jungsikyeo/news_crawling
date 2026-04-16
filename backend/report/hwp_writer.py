@@ -220,13 +220,28 @@ def generate_hwp_from_template(
         shutil.copy2(template_path, output_path)
 
         # OLE 파일 열어서 PrvText 스트림 교체
+        # olefile.write_stream은 기존 스트림과 동일한 크기만 허용하므로
+        # 원본 크기에 맞춰 자르거나 null 패딩한다.
         ole = olefile.OleFileIO(output_path, write_mode=True)
         try:
-            prv_text_encoded = report_text.encode("utf-16-le")
-
             if ole.exists("PrvText"):
+                original_data = ole.openstream("PrvText").read()
+                original_size = len(original_data)
+
+                prv_text_encoded = report_text.encode("utf-16-le")
+
+                if len(prv_text_encoded) > original_size:
+                    # 원본보다 크면 잘라냄
+                    prv_text_encoded = prv_text_encoded[:original_size]
+                elif len(prv_text_encoded) < original_size:
+                    # 원본보다 작으면 null 패딩
+                    prv_text_encoded += b"\x00" * (original_size - len(prv_text_encoded))
+
                 ole.write_stream("PrvText", prv_text_encoded)
-                logger.info(f"HWP PrvText 스트림 교체 완료: {output_path}")
+                logger.info(
+                    f"HWP PrvText 스트림 교체 완료: {output_path} "
+                    f"(원본 {original_size}B, 텍스트 {len(report_text)}자)"
+                )
             else:
                 logger.warning("PrvText 스트림이 템플릿에 존재하지 않습니다")
         finally:
