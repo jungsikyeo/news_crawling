@@ -92,12 +92,18 @@ def _fetch_article_text(url: str, timeout: int = 15) -> str:
     return ""
 
 
-def scrape_articles(articles: List[Dict], max_workers: int = 5) -> List[Dict]:
-    """기사 목록의 URL로부터 본문을 병렬로 가져와 'content' 키에 추가."""
+def scrape_articles(articles: List[Dict], max_workers: int = 5, on_progress=None) -> List[Dict]:
+    """기사 목록의 URL로부터 본문을 병렬로 가져와 'content' 키에 추가.
+
+    Args:
+        on_progress: 콜백 함수 (done_count, total_count) — 진행률 업데이트용
+    """
     if not articles:
         return articles
 
     logger.info(f"기사 본문 스크래핑 시작: {len(articles)}건, workers={max_workers}")
+    done_count = 0
+    total = len(articles)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {}
@@ -116,8 +122,9 @@ def scrape_articles(articles: List[Dict], max_workers: int = 5) -> List[Dict]:
                 logger.error(f"기사 본문 스크래핑 에러 (index={idx}): {e}")
                 articles[idx]["content"] = ""
 
-            # 완료 간 짧은 랜덤 딜레이
-            time.sleep(random.uniform(0.1, 0.3))
+            done_count += 1
+            if on_progress:
+                on_progress(done_count, total)
 
     # URL이 없는 기사에도 빈 content 보장
     for article in articles:

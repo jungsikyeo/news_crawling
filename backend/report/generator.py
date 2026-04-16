@@ -150,7 +150,10 @@ class ReportGenerator:
             self.progress_detail = f"기사 본문 스크래핑 중... (0/{len(articles)})"
             logger.info("[보고서] Step 2: 기사 본문 스크래핑")
 
-            articles = scrape_articles(articles, max_workers=5)
+            def _on_scrape_progress(done, total):
+                self.progress_detail = f"기사 본문 스크래핑 중... ({done}/{total})"
+
+            articles = scrape_articles(articles, max_workers=5, on_progress=_on_scrape_progress)
 
             scraped_count = sum(1 for a in articles if a.get("content"))
             self.progress_detail = f"본문 스크래핑 완료 ({scraped_count}/{len(articles)}건)"
