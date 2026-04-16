@@ -338,15 +338,68 @@ def _detect_style(line: str) -> tuple:
     return _STYLES["body"]
 
 
+def _clone_paragraph(p_template, new_text: str, new_id: int, hp_ns: str):
+    """템플릿 paragraph를 deep copy하고 텍스트만 교체한다.
+
+    테이블(tbl) 안의 텍스트와 일반 run의 텍스트를 모두 교체한다.
+    """
+    import copy
+    p = copy.deepcopy(p_template)
+    p.set("id", str(new_id))
+
+    # linesegarray 제거 (새 텍스트 길이가 달라지므로)
+    for lsa in p.findall(f"{{{hp_ns}}}linesegarray"):
+        p.remove(lsa)
+
+    # tbl 안의 텍스트 교체
+    tbl_texts = list(p.iter(f"{{{hp_ns}}}t"))
+    if tbl_texts:
+        # 첫 번째 비어있지 않은 <t>에 텍스트 넣고 나머지 비우기
+        text_set = False
+        for t_elem in tbl_texts:
+            if not text_set and (t_elem.text or t_elem.text is None):
+                t_elem.text = new_text
+                text_set = True
+            else:
+                t_elem.text = ""
+
+    return p
+
+
+def _make_simple_paragraph(new_text: str, new_id: int, para_pr: str, char_pr: str, hp_ns: str):
+    """단순한 텍스트 paragraph를 새로 생성한다."""
+    import xml.etree.ElementTree as ET
+
+    p = ET.Element(f"{{{hp_ns}}}p")
+    p.set("id", str(new_id))
+    p.set("paraPrIDRef", para_pr)
+    p.set("styleIDRef", "0")
+    p.set("pageBreak", "0")
+    p.set("columnBreak", "0")
+    p.set("merged", "0")
+
+    run = ET.SubElement(p, f"{{{hp_ns}}}run")
+    run.set("charPrIDRef", char_pr)
+
+    t = ET.SubElement(run, f"{{{hp_ns}}}t")
+    t.text = new_text
+
+    return p
+
+
 def generate_hwpx_from_template(
     template_path: str,
     output_path: str,
     report_text: str,
     date_str: str,
 ) -> bool:
-    """HWPX 템플릿의 section0.xml 본문을 교체하여 새 파일을 생성한다.
+    """HWPX 템플릿의 본문을 교체하여 새 파일을 생성한다.
 
-    텍스트 내용을 분석하여 원본 템플릿의 스타일을 자동 매핑한다.
+    원본 템플릿의 paragraph 구조를 deep copy하여 서식을 보존한다.
+    - p0 (타이틀 박스+페이지설정): 그대로 유지
+    - p1 (빈줄): 유지
+    - p2 (요약 테이블): 유지하되 텍스트는 교체 불가 (구조 복잡)
+    - p3~ (본문): 패턴 복제 + 텍스트 교체
 
     Args:
         template_path: 템플릿 HWPX 파일 경로
@@ -359,6 +412,7 @@ def generate_hwpx_from_template(
     """
     import zipfile
     import xml.etree.ElementTree as ET
+    import copy
 
     if not os.path.exists(template_path):
         logger.error(f"HWPX 템플릿 파일을 찾을 수 없습니다: {template_path}")
@@ -367,7 +421,7 @@ def generate_hwpx_from_template(
     try:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-        # 네임스페이스 등록 (출력 시 ns0 방지)
+        # 네임스페이스 등록
         _all_ns = {
             **_HWPX_NS,
             "ha": "http://www.hancom.co.kr/hwpml/2011/app",
@@ -386,53 +440,77 @@ def generate_hwpx_from_template(
         for prefix, uri in _all_ns.items():
             ET.register_namespace(prefix, uri)
 
-        # 1. 템플릿 ZIP에서 section0.xml 읽기
+        hp_ns = _HWPX_NS["hp"]
+
+        # 1. 템플릿 파싱
         with zipfile.ZipFile(template_path, "r") as zin:
             section_xml = zin.read("Contents/section0.xml")
 
-        # 2. section0.xml 파싱
         root = ET.fromstring(section_xml)
-        hp_ns = _HWPX_NS["hp"]
+        orig_paragraphs = root.findall(f"{{{hp_ns}}}p")
 
-        # 3. 첫 번째 <hp:p>에서 secPr(페이지 설정) 보존
-        first_p = root.find(f"{{{hp_ns}}}p")
-        sec_pr = None
-        if first_p is not None:
-            for run in first_p.findall(f"{{{hp_ns}}}run"):
-                sp = run.find(f"{{{hp_ns}}}secPr")
-                if sp is not None:
-                    sec_pr = sp
-                    run.remove(sp)
-                    break
+        # 2. 템플릿 paragraph 패턴 수집
+        # p0: 타이틀 박스 (secPr + tbl) — 그대로 유지
+        # p1: 빈 줄 — 유지
+        # p3: 카테고리 헤더 (tbl 포함) — 복제용
+        # p4: ㅇ (주요내용) 불릿 — 복제용
+        # p5: - 서브불릿 — 복제용
+        # p11: ㅇ (평가) — 복제용
+        # p17: ㅇ (사설) — 복제용
+        # p25: 빈 줄 (pp=26) — 복제용
+        tpl_header = orig_paragraphs[0]       # 타이틀 박스
+        tpl_blank_after_header = orig_paragraphs[1]  # 빈줄
+        tpl_cat_header = orig_paragraphs[3]   # 카테고리 헤더 (tbl)
+        tpl_bullet = orig_paragraphs[4]       # ㅇ 불릿
+        tpl_sub = orig_paragraphs[5]          # - 서브불릿
+        tpl_eval = orig_paragraphs[11]        # ㅇ (평가)
+        tpl_opinion = orig_paragraphs[17]     # ㅇ (사설)
+        tpl_blank = orig_paragraphs[25]       # 빈 줄
 
-        # 4. 기존 paragraph 모두 제거
-        for p in root.findall(f"{{{hp_ns}}}p"):
+        # 3. 기존 paragraph 모두 제거
+        for p in orig_paragraphs:
             root.remove(p)
 
-        # 5. 보고서 텍스트를 스타일 매핑된 paragraph로 변환
+        # 4. 헤더 유지 (p0 + p1)
+        root.append(copy.deepcopy(tpl_header))
+        root.append(copy.deepcopy(tpl_blank_after_header))
+
+        # 5. 보고서 텍스트를 paragraph로 변환
         lines = report_text.split("\n")
-        for i, line in enumerate(lines):
-            para_pr, char_pr = _detect_style(line)
+        pid = 10  # paragraph ID 시작값
 
-            p_elem = ET.SubElement(root, f"{{{hp_ns}}}p")
-            p_elem.set("id", str(i))
-            p_elem.set("paraPrIDRef", para_pr)
-            p_elem.set("styleIDRef", "0")
-            p_elem.set("pageBreak", "0")
-            p_elem.set("columnBreak", "0")
-            p_elem.set("merged", "0")
+        for line in lines:
+            stripped = line.strip()
 
-            run_elem = ET.SubElement(p_elem, f"{{{hp_ns}}}run")
-            run_elem.set("charPrIDRef", char_pr)
+            if not stripped or stripped.startswith("=") or stripped == "// END //":
+                root.append(_clone_paragraph(tpl_blank, "", pid, hp_ns))
+            elif stripped.startswith("정책 보도 일일 종합"):
+                continue  # 이미 헤더에 포함
+            elif "년" in stripped and "월" in stripped and "일" in stripped and len(stripped) < 30:
+                continue  # 이미 헤더에 포함
+            elif stripped.startswith("▶") or stripped.startswith("■"):
+                # 카테고리/섹션 헤더 — tbl 구조 복제
+                header_text = stripped.lstrip("▶■ ")
+                root.append(_clone_paragraph(tpl_cat_header, header_text, pid, hp_ns))
+            elif stripped.startswith("ㅇ") and "(평가)" in stripped:
+                root.append(_clone_paragraph(tpl_eval, line, pid, hp_ns))
+            elif stripped.startswith("ㅇ") and "(사설)" in stripped:
+                root.append(_clone_paragraph(tpl_opinion, line, pid, hp_ns))
+            elif stripped.startswith("ㅇ"):
+                root.append(_clone_paragraph(tpl_bullet, line, pid, hp_ns))
+            elif stripped.startswith("-") or stripped.startswith("  -"):
+                root.append(_clone_paragraph(tpl_sub, line, pid, hp_ns))
+            elif stripped.startswith("￭"):
+                root.append(_clone_paragraph(tpl_bullet, line, pid, hp_ns))
+            elif stripped.startswith("---"):
+                root.append(_clone_paragraph(tpl_blank, "", pid, hp_ns))
+            else:
+                # 일반 본문
+                root.append(_make_simple_paragraph(line, pid, "26", "9", hp_ns))
 
-            # 첫 번째 paragraph에 secPr 넣기
-            if i == 0 and sec_pr is not None:
-                run_elem.insert(0, sec_pr)
+            pid += 1
 
-            t_elem = ET.SubElement(run_elem, f"{{{hp_ns}}}t")
-            t_elem.text = line
-
-        # 6. 수정된 XML을 새 ZIP으로 쓰기
+        # 6. 새 ZIP 쓰기
         new_section_xml = ET.tostring(root, encoding="unicode", xml_declaration=True)
 
         with zipfile.ZipFile(template_path, "r") as zin:
@@ -445,7 +523,7 @@ def generate_hwpx_from_template(
                     else:
                         zout.writestr(item, zin.read(item))
 
-        logger.info(f"HWPX 보고서 생성 완료: {output_path} ({len(lines)}개 paragraph)")
+        logger.info(f"HWPX 보고서 생성 완료: {output_path} ({pid - 10}개 paragraph)")
         return True
 
     except Exception as e:
