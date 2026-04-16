@@ -100,16 +100,28 @@ def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[s
         return None
 
     try:
+        # uvicorn 서브프로세스에서도 claude가 동작하도록 환경변수 보강
+        env = os.environ.copy()
+        claude_dir = os.path.dirname(path)
+        if claude_dir not in env.get("PATH", ""):
+            env["PATH"] = claude_dir + os.pathsep + env.get("PATH", "")
+        # HOME이 없으면 claude config 읽기 실패할 수 있음
+        if "HOME" not in env:
+            env["HOME"] = os.path.expanduser("~")
+
+        logger.info(f"Claude CLI 호출: path={path}, prompt_len={len(prompt)}, input_len={len(input_data)}")
         result = subprocess.run(
             [path, "-p", prompt],
             input=input_data,
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         if result.returncode != 0:
-            logger.error(f"Claude CLI 오류 (exit {result.returncode}): {result.stderr.strip()}")
+            logger.error(f"Claude CLI 오류 (exit {result.returncode}): {result.stderr.strip()[:500]}")
             return None
+        logger.info(f"Claude CLI 응답: {len(result.stdout)} chars")
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
         logger.error(f"Claude CLI 호출 타임아웃 ({timeout}초)")

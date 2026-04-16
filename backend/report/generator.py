@@ -156,9 +156,19 @@ class ReportGenerator:
             self.progress_detail = "AI로 기사 분류 중..."
             logger.info("[보고서] Step 3: AI 기사 분류")
 
-            classification = classify_articles(articles)
-            if not classification:
-                raise RuntimeError("AI 기사 분류에 실패했습니다.")
+            classification_result = classify_articles(articles)
+            if not classification_result or "categories" not in classification_result:
+                raise RuntimeError("AI 기사 분류에 실패했습니다. (classify_articles 반환값 없음)")
+
+            # classify_articles 반환: {"categories": [{"name": "...", "article_ids": [0,2,5]}]}
+            # 이를 {카테고리명: [기사dict 리스트]} 형태로 변환
+            classification: Dict[str, List[Dict]] = {}
+            for cat in classification_result["categories"]:
+                cat_name = cat["name"]
+                cat_article_ids = cat.get("article_ids", [])
+                cat_articles = [articles[idx] for idx in cat_article_ids if idx < len(articles)]
+                if cat_articles:
+                    classification[cat_name] = cat_articles
 
             categories = list(classification.keys())
             self.progress_detail = f"기사 분류 완료 ({len(categories)}개 카테고리)"
