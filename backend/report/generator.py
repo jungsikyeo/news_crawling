@@ -236,7 +236,7 @@ class ReportGenerator:
 
             # HWP 생성 시도 (템플릿이 있을 경우)
             hwp_path = os.path.join(REPORTS_DIR, f"{base_name}.hwp")
-            template_path = os.path.join(TEMPLATE_DIR, "report_template.hwp")
+            template_path = os.path.join(TEMPLATE_DIR, "daily_report_template.hwp")
             hwp_ok = False
             if os.path.exists(template_path):
                 hwp_ok = generate_hwp_from_template(
