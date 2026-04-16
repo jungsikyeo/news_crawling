@@ -1,0 +1,271 @@
+"""
+HWP 파일 생성 모듈 — 템플릿 기반 OLE 수정 방식.
+
+HWP 바이너리 포맷은 복잡하므로, 보수적 접근:
+  - 템플릿 HWP를 복사한 뒤 PrvText(미리보기 텍스트) 스트림만 교체
+  - BodyText 레코드 재구성은 위험하므로 하지 않음
+  - .txt 폴백을 항상 함께 저장
+"""
+
+import logging
+import os
+import shutil
+import struct
+import zlib
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# HWP 바이너리 읽기 유틸
+# ---------------------------------------------------------------------------
+
+HWPTAG_PARA_TEXT = 67  # 16 (HWPTAG_BEGIN) + 51
+
+# 16바이트 확장 제어문자 코드
+_CTRL_EXTEND_16 = {1, 2, 3, 11, 12, 14, 15, 16, 17, 18, 21, 22, 23}
+
+
+def _read_hwp_body_text(ole) -> bytes:
+    """OLE 파일에서 BodyText/Section0 스트림을 읽어 반환한다.
+
+    FileHeader의 플래그(offset 36)에서 압축 여부를 확인하고,
+    압축되어 있으면 zlib raw-deflate로 해제한다.
+    """
+    # FileHeader에서 압축 플래그 확인
+    header_data = ole.openstream("FileHeader").read()
+    compressed = bool(header_data[36] & 1)
+
+    raw = ole.openstream("BodyText/Section0").read()
+
+    if compressed:
+        return zlib.decompress(raw, -15)
+    return raw
+
+
+def _extract_text_from_records(data: bytes) -> str:
+    """HWP 바이너리 레코드 스트림에서 텍스트를 추출한다.
+
+    레코드 헤더(4바이트): tag_id(10bit) | level(10bit) | size(12bit)
+    size == 0xFFF 이면 다음 4바이트가 실제 크기.
+    HWPTAG_PARA_TEXT(67) 레코드에서 UTF-16LE 텍스트를 디코딩한다.
+    """
+    pos = 0
+    text_parts: list[str] = []
+
+    while pos + 4 <= len(data):
+        header_val = struct.unpack_from("<I", data, pos)[0]
+        pos += 4
+
+        tag_id = header_val & 0x3FF
+        size = (header_val >> 20) & 0xFFF
+
+        if size == 0xFFF:
+            if pos + 4 > len(data):
+                break
+            size = struct.unpack_from("<I", data, pos)[0]
+            pos += 4
+
+        if pos + size > len(data):
+            break
+
+        if tag_id == HWPTAG_PARA_TEXT:
+            record_data = data[pos : pos + size]
+            text_parts.append(_decode_para_text(record_data))
+
+        pos += size
+
+    return "\n".join(text_parts)
+
+
+def _decode_para_text(record_data: bytes) -> str:
+    """HWPTAG_PARA_TEXT 레코드 바이트를 텍스트로 디코딩한다."""
+    result: list[str] = []
+    i = 0
+    length = len(record_data)
+
+    while i + 1 < length:
+        char_code = struct.unpack_from("<H", record_data, i)[0]
+
+        if char_code < 32:
+            if char_code in _CTRL_EXTEND_16:
+                # 16바이트 확장 제어문자: 2(현재) + 14(추가) = 16바이트 건너뜀
+                i += 16
+            elif char_code == 9:  # tab
+                result.append("\t")
+                i += 16
+            elif char_code == 10:  # LF
+                result.append("\n")
+                i += 2
+            elif char_code == 13:  # CR
+                result.append("\n")
+                i += 2
+            else:
+                i += 2
+        else:
+            result.append(chr(char_code))
+            i += 2
+
+    return "".join(result)
+
+
+# ---------------------------------------------------------------------------
+# 보고서 텍스트 생성
+# ---------------------------------------------------------------------------
+
+_WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def generate_text_report(
+    date_str: str,
+    overview: str,
+    editorials: str,
+    category_details: dict[str, str],
+) -> str:
+    """보고서 전체 텍스트를 양식에 맞춰 조합한다.
+
+    Args:
+        date_str: 날짜 문자열 (예: "2026-04-16")
+        overview: 주요 뉴스 요약 텍스트
+        editorials: 금일 사설 텍스트
+        category_details: 카테고리별 상세 딕셔너리 (예: {"경제": "ㅇ 경제 내용"})
+
+    Returns:
+        완성된 보고서 텍스트
+    """
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    weekday_kr = _WEEKDAY_KR[dt.weekday()]
+
+    lines: list[str] = []
+
+    # ── 헤더 ──
+    lines.append(f"{dt.year}년 {dt.month}월 {dt.day}일 ({weekday_kr})")
+    lines.append("")
+    lines.append("정책 보도 일일 종합")
+    lines.append("")
+    lines.append("=" * 60)
+
+    # ── 주요 뉴스 요약 ──
+    lines.append("")
+    lines.append("■ 주요 뉴스 요약")
+    lines.append("")
+    lines.append(overview)
+
+    # ── 금일 사설 ──
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append("■ 금일 사설")
+    lines.append("")
+    lines.append(editorials)
+
+    # ── 카테고리별 상세 ──
+    if category_details:
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append("■ 카테고리별 상세")
+
+        for category, detail in category_details.items():
+            lines.append("")
+            lines.append(f"▶ {category}")
+            lines.append("")
+            lines.append(detail)
+
+    lines.append("")
+    lines.append("=" * 60)
+    lines.append("// END //")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# HWP 파일 생성 (템플릿 기반)
+# ---------------------------------------------------------------------------
+
+
+def generate_hwp_from_template(
+    template_path: str,
+    output_path: str,
+    report_text: str,
+    date_str: str,
+) -> bool:
+    """템플릿 HWP를 복사한 뒤 PrvText 스트림만 교체하여 저장한다.
+
+    BodyText 레코드를 재구성하지 않고, PrvText(미리보기 텍스트)만
+    교체하는 보수적 접근 방식이다.
+
+    Args:
+        template_path: 템플릿 HWP 파일 경로
+        output_path: 출력 HWP 파일 경로
+        report_text: 보고서 텍스트
+        date_str: 날짜 문자열
+
+    Returns:
+        성공 시 True, 실패 시 False
+    """
+    try:
+        import olefile
+    except ImportError:
+        logger.error("olefile 패키지가 설치되어 있지 않습니다: pip install olefile")
+        return False
+
+    if not os.path.exists(template_path):
+        logger.error(f"템플릿 파일을 찾을 수 없습니다: {template_path}")
+        return False
+
+    try:
+        # 템플릿 복사
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        shutil.copy2(template_path, output_path)
+
+        # OLE 파일 열어서 PrvText 스트림 교체
+        ole = olefile.OleFileIO(output_path, write_mode=True)
+        try:
+            prv_text_encoded = report_text.encode("utf-16-le")
+
+            if ole.exists("PrvText"):
+                ole.write_stream("PrvText", prv_text_encoded)
+                logger.info(f"HWP PrvText 스트림 교체 완료: {output_path}")
+            else:
+                logger.warning("PrvText 스트림이 템플릿에 존재하지 않습니다")
+        finally:
+            ole.close()
+
+        return True
+
+    except Exception as e:
+        logger.error(f"HWP 생성 실패: {e}")
+        # 실패 시 불완전한 파일 제거
+        if os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except OSError:
+                pass
+        return False
+
+
+# ---------------------------------------------------------------------------
+# 텍스트 보고서 저장 (폴백)
+# ---------------------------------------------------------------------------
+
+
+def save_text_report(output_path: str, report_text: str) -> bool:
+    """보고서를 .txt 파일로 저장한다. HWP 생성 실패 시 폴백으로 사용.
+
+    Args:
+        output_path: 출력 파일 경로
+        report_text: 보고서 텍스트
+
+    Returns:
+        성공 시 True, 실패 시 False
+    """
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(report_text)
+        logger.info(f"텍스트 보고서 저장 완료: {output_path}")
+        return True
+    except Exception as e:
+        logger.error(f"텍스트 보고서 저장 실패: {e}")
+        return False
