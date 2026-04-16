@@ -38,7 +38,7 @@ function todayString(): string {
 
 export default function ReportGenerator() {
   const [date, setDate] = useState(todayString)
-  const [keyword, setKeyword] = useState("")
+  const [categories, setCategories] = useState("")
   const [status, setStatus] = useState<ReportStatus | null>(null)
   const [reports, setReports] = useState<ReportFile[]>([])
   const [polling, setPolling] = useState(false)
@@ -94,7 +94,7 @@ export default function ReportGenerator() {
     setError(null)
     setSuccessMsg(null)
     try {
-      const res = await generateReport(date || undefined, keyword || undefined)
+      const res = await generateReport(date || undefined, categories || undefined)
       if (res.error) {
         setError(res.error)
         return
@@ -179,14 +179,15 @@ export default function ReportGenerator() {
               />
             </div>
             <div className="flex flex-col gap-1.5 flex-1">
-              <label className="text-xs text-muted-foreground">키워드 (선택)</label>
+              <label className="text-xs text-muted-foreground">카테고리 (선택)</label>
               <Input
                 type="text"
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="전체"
+                value={categories}
+                onChange={(e) => setCategories(e.target.value)}
+                placeholder="비우면 AI 자동 분류"
                 disabled={isGenerating}
               />
+              <p className="text-[10px] text-muted-foreground">콤마로 구분 (예: 경제, 외교안보, 사회)</p>
             </div>
             <Button
               onClick={handleGenerate}

@@ -195,11 +195,11 @@ export interface ReportFile {
 
 // === Report functions ===
 
-export async function generateReport(date?: string, keyword?: string) {
+export async function generateReport(date?: string, categories?: string) {
   return apiFetch<{ status?: string; error?: string }>("/api/report/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date: date ?? null, keyword: keyword ?? null }),
+    body: JSON.stringify({ date: date ?? null, categories: categories || null }),
   })
 }
 

@@ -47,8 +47,13 @@ class ReportGenerator:
     # Public API
     # ------------------------------------------------------------------
 
-    def generate(self, date_str: Optional[str] = None, keyword: Optional[str] = None):
-        """보고서 생성을 시작한다. 이미 실행 중이면 무시."""
+    def generate(self, date_str: Optional[str] = None, user_categories: Optional[List[str]] = None):
+        """보고서 생성을 시작한다. 이미 실행 중이면 무시.
+
+        Args:
+            date_str: 대상 날짜 (기본: 오늘)
+            user_categories: 사용자 지정 카테고리 리스트. None이면 AI 자동 분류.
+        """
         if not self._lock.acquire(blocking=False):
             logger.warning("보고서 생성이 이미 진행 중입니다.")
             return
@@ -63,7 +68,7 @@ class ReportGenerator:
                 date_str = datetime.now().strftime("%Y-%m-%d")
 
             t = threading.Thread(
-                target=self._generate_job, args=(date_str, keyword), daemon=True
+                target=self._generate_job, args=(date_str, user_categories), daemon=True
             )
             t.start()
         except Exception:
@@ -111,19 +116,18 @@ class ReportGenerator:
     # Internal pipeline
     # ------------------------------------------------------------------
 
-    def _generate_job(self, date_str: str, keyword: Optional[str]):
+    def _generate_job(self, date_str: str, user_categories: Optional[List[str]]):
         """메인 파이프라인. daemon thread에서 실행된다."""
         try:
             # --- Step 1: DB에서 기사 목록 가져오기 ---
             self.status = "fetching_articles"
             self.progress_detail = "DB에서 기사 목록을 가져오는 중..."
-            logger.info(f"[보고서] Step 1: 기사 목록 조회 (date={date_str}, keyword={keyword})")
+            logger.info(f"[보고서] Step 1: 기사 목록 조회 (date={date_str}, categories={user_categories})")
 
             conn = get_connection()
             try:
                 rows = get_news_list(
                     conn,
-                    keyword=keyword,
                     date_from=date_str,
                     date_to=date_str,
                     limit=200,
@@ -153,10 +157,13 @@ class ReportGenerator:
 
             # --- Step 3: AI 기사 분류 ---
             self.status = "ai_classifying"
-            self.progress_detail = "AI로 기사 분류 중..."
-            logger.info("[보고서] Step 3: AI 기사 분류")
+            if user_categories:
+                self.progress_detail = f"지정 카테고리({', '.join(user_categories)})로 분류 중..."
+            else:
+                self.progress_detail = "AI로 기사 자동 분류 중..."
+            logger.info(f"[보고서] Step 3: AI 기사 분류 (user_categories={user_categories})")
 
-            classification_result = classify_articles(articles)
+            classification_result = classify_articles(articles, user_categories=user_categories)
             if not classification_result or "categories" not in classification_result:
                 raise RuntimeError("AI 기사 분류에 실패했습니다. (classify_articles 반환값 없음)")
 

@@ -165,12 +165,13 @@ def _strip_code_block(text: str) -> str:
     return text.strip()
 
 
-def classify_articles(articles: List[Dict]) -> Optional[Dict]:
+def classify_articles(articles: List[Dict], user_categories: Optional[List[str]] = None) -> Optional[Dict]:
     """기사 목록을 카테고리별로 분류한다.
 
     Args:
         articles: 기사 딕셔너리 리스트. 각 항목에 id, title, publisher,
                   content(또는 preview/description) 키가 있어야 한다.
+        user_categories: 사용자 지정 카테고리 리스트. None이면 AI가 자동 결정.
 
     Returns:
         {"categories": [{"name": "카테고리명", "article_ids": [0, 2, 5]}, ...]}
@@ -198,14 +199,25 @@ def classify_articles(articles: List[Dict]) -> Optional[Dict]:
                 item["preview"] = description[:200]
         compact.append(item)
 
-    prompt = (
-        "당신은 뉴스 기사 분류 전문가입니다. "
-        "아래 JSON 배열로 제공되는 기사들을 주제별 카테고리로 분류하세요. "
-        "카테고리는 정치, 경제, 사회, 국제, IT/과학, 문화/생활, 스포츠, 사설/칼럼 등 적절한 이름을 사용하되, "
-        "기사 내용에 맞게 자유롭게 지정하세요. "
-        "결과는 반드시 아래 JSON 형식으로만 출력하세요. 설명이나 부연 없이 JSON만 출력하세요.\n"
-        '{"categories": [{"name": "카테고리명", "article_ids": [0, 2, 5]}]}'
-    )
+    if user_categories:
+        cat_list_str = ", ".join(user_categories)
+        prompt = (
+            "당신은 뉴스 기사 분류 전문가입니다. "
+            "아래 JSON 배열로 제공되는 기사들을 다음 카테고리로 분류하세요: "
+            f"[{cat_list_str}]. "
+            "반드시 위 카테고리만 사용하세요. 어떤 카테고리에도 맞지 않는 기사는 '기타'로 분류하세요. "
+            "결과는 반드시 아래 JSON 형식으로만 출력하세요. 설명이나 부연 없이 JSON만 출력하세요.\n"
+            '{"categories": [{"name": "카테고리명", "article_ids": [0, 2, 5]}]}'
+        )
+    else:
+        prompt = (
+            "당신은 뉴스 기사 분류 전문가입니다. "
+            "아래 JSON 배열로 제공되는 기사들을 주제별 카테고리로 분류하세요. "
+            "카테고리는 정치, 경제, 사회, 국제, IT/과학, 문화/생활, 스포츠, 사설/칼럼 등 적절한 이름을 사용하되, "
+            "기사 내용에 맞게 자유롭게 지정하세요. "
+            "결과는 반드시 아래 JSON 형식으로만 출력하세요. 설명이나 부연 없이 JSON만 출력하세요.\n"
+            '{"categories": [{"name": "카테고리명", "article_ids": [0, 2, 5]}]}'
+        )
 
     input_data = json.dumps(compact, ensure_ascii=False)
     raw = _call_claude(prompt, input_data)
