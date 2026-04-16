@@ -123,9 +123,39 @@ export default function ReportGenerator() {
       {status && !cliAvailable && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-amber-500 mb-1">CLI 도구 미설치</p>
-            <p className="text-muted-foreground">{status.cli_message}</p>
+          <div className="text-sm space-y-2">
+            <p className="font-medium text-amber-500">AI 보고서 생성을 위해 Claude Code CLI가 필요합니다</p>
+            <p className="text-muted-foreground">
+              보고서 생성 기능은 Claude Code CLI를 사용하여 기사를 분류하고 요약합니다.
+              아래 단계를 따라 설치해주세요.
+            </p>
+            <ol className="text-muted-foreground list-decimal list-inside space-y-1">
+              <li>
+                터미널에서 설치:{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  npm install -g @anthropic-ai/claude-code
+                </code>
+              </li>
+              <li>
+                로그인:{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                  claude login
+                </code>
+              </li>
+              <li>앱을 재시작하세요</li>
+            </ol>
+            <p className="text-muted-foreground text-xs">
+              Claude Desktop과는 별도 설치이며,{" "}
+              <a
+                href="https://docs.anthropic.com/en/docs/claude-code"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline hover:no-underline"
+              >
+                공식 문서
+              </a>
+              에서 자세한 내용을 확인할 수 있습니다.
+            </p>
           </div>
         </div>
       )}
