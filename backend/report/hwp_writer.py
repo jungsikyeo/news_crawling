@@ -294,6 +294,10 @@ def _detect_style(line: str) -> tuple:
 
     if not stripped:
         return _STYLES["blank"]
+    # 구분선 무시
+    if stripped.startswith("=") or stripped == "---" or stripped == "// END //":
+        return _STYLES["blank"]
+    # 헤더
     if stripped.startswith("정책 보도 일일 종합"):
         return _STYLES["title"]
     if stripped.startswith("종합") and "방송" in stripped:
@@ -302,24 +306,34 @@ def _detect_style(line: str) -> tuple:
         return _STYLES["subtitle"]
     if "년" in stripped and "월" in stripped and "일" in stripped and len(stripped) < 30:
         return _STYLES["date"]
+    # 섹션 헤더
     if stripped.startswith("■"):
         return _STYLES["editorial_h"]
     if stripped.startswith("▶"):
         return _STYLES["category"]
+    # 마크다운 볼드로 된 카테고리명 (AI 출력 패턴)
+    if stripped.startswith("**") and stripped.endswith("**"):
+        return _STYLES["category"]
     if stripped.startswith("□"):
         return _STYLES["section"]
+    # 사설
     if stripped.startswith("￭"):
         return _STYLES["editorial"]
+    # 불릿
     if stripped.startswith("ㅇ") and "(평가)" in stripped:
         return _STYLES["eval"]
     if stripped.startswith("ㅇ") and "(사설)" in stripped:
         return _STYLES["opinion"]
     if stripped.startswith("ㅇ"):
         return _STYLES["bullet"]
-    if stripped.startswith("-") or stripped.startswith("  -"):
+    # 서브불릿
+    if stripped.startswith("-") or stripped.startswith("  -") or stripped.startswith("   -"):
         return _STYLES["sub_bullet"]
-    if stripped.startswith("="):
-        return _STYLES["blank"]
+    # 마크다운 서브헤더 (AI 출력 패턴)
+    if stripped.startswith("###"):
+        return _STYLES["section"]
+    if stripped.startswith("##"):
+        return _STYLES["category"]
 
     return _STYLES["body"]
 
