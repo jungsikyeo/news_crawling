@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, type MutableRefObject } from "react"
 import { Trash2, History as HistoryIcon, ChevronDown, ChevronRight, Download, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fetchHistory, deleteHistory, fetchSessions, exportCsv } from "@/hooks/useApi"
@@ -38,13 +38,17 @@ interface SessionItem {
   article_count: number
 }
 
-export function History({ onViewSession }: { onViewSession?: (sessionId: number, label: string) => void }) {
+export function History({ onViewSession, refreshRef }: { onViewSession?: (sessionId: number, label: string) => void; refreshRef?: MutableRefObject<(() => void) | null> }) {
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const expandedIdRef = useRef<number | null>(null)
   const [sessions, setSessions] = useState<Record<number, SessionItem[]>>({})
   const [loadingSessions, setLoadingSessions] = useState<number | null>(null)
+
+  // expandedId 변경 시 ref 동기화
+  useEffect(() => { expandedIdRef.current = expandedId }, [expandedId])
 
   async function load() {
     setLoading(true)
@@ -55,6 +59,15 @@ export function History({ onViewSession }: { onViewSession?: (sessionId: number,
         ?? (data as { items?: HistoryItem[] }).items
         ?? (data as HistoryItem[])
       setItems(Array.isArray(raw) ? raw : [])
+      // 펼쳐진 항목 세션 다시 로드
+      const currentExpanded = expandedIdRef.current
+      if (currentExpanded !== null) {
+        try {
+          const sData = await fetchSessions(currentExpanded)
+          const list = Array.isArray(sData) ? sData : []
+          setSessions((prev) => ({ ...prev, [currentExpanded]: list as SessionItem[] }))
+        } catch { /* ignore */ }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "히스토리 로드 실패")
     } finally {
@@ -65,6 +78,11 @@ export function History({ onViewSession }: { onViewSession?: (sessionId: number,
   useEffect(() => {
     void load()
   }, [])
+
+  useEffect(() => {
+    if (refreshRef) refreshRef.current = load
+    return () => { if (refreshRef) refreshRef.current = null }
+  }, [refreshRef])
 
   async function toggleExpand(historyId: number) {
     if (expandedId === historyId) {
@@ -213,7 +231,7 @@ export function History({ onViewSession }: { onViewSession?: (sessionId: number,
                       className="flex items-center gap-3 py-2 border-b border-border/20 last:border-b-0"
                     >
                       <span className="text-xs font-medium text-foreground w-16">
-                        {si + 1}회차
+                        {itemSessions.length - si}회차
                       </span>
                       <span className="text-xs text-muted-foreground">
                         신규 {session.new_count}건 / 수집 {session.total_count}건
@@ -226,7 +244,7 @@ export function History({ onViewSession }: { onViewSession?: (sessionId: number,
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6 text-muted-foreground hover:text-primary"
-                        onClick={() => onViewSession?.(session.id, `${formatKeywords(item.keywords)} · ${item.mode ?? "OR"} · ${si + 1}회차`)}
+                        onClick={() => onViewSession?.(session.id, `${formatKeywords(item.keywords)} · ${item.mode ?? "OR"} · ${itemSessions.length - si}회차`)}
                         title="기사 보기"
                       >
                         <Eye className="h-3 w-3" />

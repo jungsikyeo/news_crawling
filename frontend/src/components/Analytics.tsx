@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, type MutableRefObject } from "react"
 import ReactECharts from "echarts-for-react"
 import { Download, BarChart2, Hash, Globe, Building2, Calendar } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -67,7 +67,7 @@ const PRESETS = [
   { label: "전체", from: () => "", to: () => "" },
 ]
 
-export function Analytics() {
+export function Analytics({ refreshRef }: { refreshRef?: MutableRefObject<(() => void) | null> } = {}) {
   const [stats, setStats] = useState<AllStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -140,6 +140,11 @@ export function Analytics() {
   useEffect(() => {
     void loadStats()
   }, [loadStats])
+
+  useEffect(() => {
+    if (refreshRef) refreshRef.current = loadStats
+    return () => { if (refreshRef) refreshRef.current = null }
+  }, [refreshRef, loadStats])
 
   async function handleExport() {
     setExporting(true)

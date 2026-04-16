@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Notification, ipcMain, nativeImage, Tray, Menu } = require("electron");
+const { app, BrowserWindow, Notification, ipcMain, nativeImage, Tray, Menu, shell, dialog } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const http = require("http");
@@ -48,13 +48,18 @@ function startBackend() {
   backendProcess.on("exit", (code) => {
     console.log(`Backend exited with code ${code}`);
     backendProcess = null;
-    if (mainWindow && !quitting) {
-      try { mainWindow.close(); } catch (_) { /* already destroyed */ }
+    if (!quitting && mainWindow) {
+      dialog.showErrorBox(
+        "NewsDesk 오류",
+        `백엔드 서버가 종료되었습니다 (코드: ${code}).\n앱을 다시 시작해 주세요.`
+      );
+      quitting = true;
+      app.quit();
     }
   });
 }
 
-function waitForBackend(timeout = 30000) {
+function waitForBackend(timeout = 45000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
@@ -79,15 +84,28 @@ function waitForBackend(timeout = 30000) {
 
 function killBackend() {
   if (backendProcess && !backendProcess.killed) {
+    const pid = backendProcess.pid;
+    backendProcess = null;
     try {
-      // Windows: taskkill /T kills the entire process tree
-      spawn("taskkill", ["/pid", String(backendProcess.pid), "/T", "/F"], {
+      // Windows: taskkill /T kills the entire process tree (자식 프로세스 포함)
+      const result = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
         stdio: "ignore",
+        windowsHide: true,
+      });
+      result.on("exit", () => {
+        // 프로세스 트리가 제대로 종료되지 않았을 경우, 포트를 점유하는 프로세스 추가 정리
+        const { execSync } = require("child_process");
+        try {
+          const out = execSync('netstat -ano | findstr ":8000" | findstr "LISTEN"', { windowsHide: true }).toString();
+          const match = out.match(/\s(\d+)\s*$/m);
+          if (match) {
+            spawn("taskkill", ["/pid", match[1], "/T", "/F"], { stdio: "ignore", windowsHide: true });
+          }
+        } catch (_) { /* no listener on port — ok */ }
       });
     } catch (_) {
       // ignore — process may already be dead
     }
-    backendProcess = null;
   }
 }
 
@@ -108,6 +126,13 @@ async function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   mainWindow.loadURL(BACKEND_URL);
+
+  // 외부 링크(target="_blank")를 시스템 기본 브라우저에서 열기
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -137,6 +162,11 @@ app.whenReady().then(async () => {
     await waitForBackend();
   } catch (e) {
     console.error(e.message);
+    dialog.showErrorBox(
+      "NewsDesk 시작 실패",
+      "백엔드 서버를 시작할 수 없습니다.\n다른 NewsDesk가 이미 실행 중이거나, 포트 8000이 사용 중일 수 있습니다."
+    );
+    killBackend();
     app.quit();
     return;
   }

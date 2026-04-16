@@ -30,6 +30,8 @@ function App() {
   const runOnceWaiting = useRef(false)
   const prevRunning = useRef(false)
   const newsRefresh = useRef<(() => void) | null>(null)
+  const historyRefresh = useRef<(() => void) | null>(null)
+  const analyticsRefresh = useRef<(() => void) | null>(null)
 
   function showModal(type: ModalType, title: string, message: string) {
     setModal({ open: true, type, title, message })
@@ -84,12 +86,16 @@ function App() {
             onAutoClose: () => {
               setModal((m) => ({ ...m, open: false }))
               newsRefresh.current?.()
+              historyRefresh.current?.()
+              analyticsRefresh.current?.()
               setActiveTab("articles")
             },
           })
         } else {
           // 스케줄링: 목록 갱신 + 폴링 유지
           newsRefresh.current?.()
+          historyRefresh.current?.()
+          analyticsRefresh.current?.()
         }
       }
       prevRunning.current = isRunning
@@ -211,7 +217,7 @@ function App() {
             </TabsContent>
 
             <TabsContent value="analytics" className="animate-fade-up">
-              <Analytics />
+              <Analytics refreshRef={analyticsRefresh} />
             </TabsContent>
 
             <TabsContent value="scraps" className="animate-fade-up">
@@ -219,7 +225,7 @@ function App() {
             </TabsContent>
 
             <TabsContent value="history" className="animate-fade-up">
-              <History onViewSession={handleViewSession} />
+              <History onViewSession={handleViewSession} refreshRef={historyRefresh} />
             </TabsContent>
           </Tabs>
         </div>

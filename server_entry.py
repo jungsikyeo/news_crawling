@@ -14,11 +14,34 @@ for p in (BACKEND_DIR, BASE_DIR):
         sys.path.insert(0, p)
 
 import uvicorn
+import time
 from main import app
+
+_HOST = "127.0.0.1"
+_PORT = 8000
+
+
+def _wait_for_port(host: str, port: int, timeout: int = 15) -> None:
+    """포트가 사용 가능할 때까지 대기 (TIME_WAIT 해소)"""
+    import socket
+    start = time.time()
+    while time.time() - start < timeout:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((host, port))
+            sock.close()
+            return
+        except OSError:
+            sock.close()
+            time.sleep(0.5)
+    raise RuntimeError(f"Port {port} is not available after {timeout}s")
+
 
 if __name__ == "__main__":
     try:
-        uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+        _wait_for_port(_HOST, _PORT)
+        uvicorn.run(app, host=_HOST, port=_PORT, log_level="error")
     except Exception:
         import traceback
         if getattr(sys, 'frozen', False):
