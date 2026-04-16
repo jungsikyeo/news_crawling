@@ -156,6 +156,15 @@ ipcMain.on("show-notification", (_event, title, body) => {
   new Notification({ title, body, icon }).show();
 });
 
+// 렌더러에서 캐시 삭제 요청 수신
+ipcMain.handle("clear-cache", async () => {
+  const ses = mainWindow?.webContents?.session;
+  if (ses) {
+    await ses.clearCache();
+    await ses.clearStorageData({ storages: ["cachestorage", "shadercache", "serviceworkers"] });
+  }
+});
+
 app.whenReady().then(async () => {
   startBackend();
   try {
