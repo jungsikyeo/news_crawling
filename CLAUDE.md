@@ -18,11 +18,8 @@ cd frontend && npm run dev
 # 프론트엔드 빌드
 cd frontend && npm run build
 
-# 전체 빌드 (React 빌드 → PyInstaller exe 패키징 → dist/NewsDesk/)
+# 전체 빌드 (React 빌드 → PyInstaller exe 패키징 → Electron 설치 파일)
 python build.py
-
-# 런처 실행 (FastAPI 데몬 스레드 + 브라우저 자동 오픈)
-python launcher.py
 ```
 
 ## 아키텍처

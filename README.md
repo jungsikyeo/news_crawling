@@ -81,13 +81,6 @@ python build.py
 | `dist-electron/win-unpacked/NewsDesk.exe` | Electron 포터블 실행 파일 |
 | `dist-electron/NewsDesk Setup 1.0.0.exe` | NSIS 설치 프로그램 |
 
-### 간편 실행 (브라우저 모드)
-
-```bash
-# FastAPI 서버 시작 + 브라우저 자동 오픈
-python launcher.py
-```
-
 ## 프로젝트 구조
 
 ```
@@ -125,8 +118,7 @@ news_crawling/
 │   └── package.json         # Electron 의존성 및 빌드 설정
 ├── assets/                   # 아이콘 리소스 (icon.png, icon.ico)
 ├── build.py                  # 전체 빌드 스크립트 (프론트엔드 + PyInstaller + Electron)
-├── server_entry.py           # Electron용 백엔드 진입점
-├── launcher.py               # 런처 (서버 + 브라우저)
+├── server_entry.py           # Electron용 백엔드 진입점 (PyInstaller)
 └── requirements.txt          # Python 의존성
 ```
 

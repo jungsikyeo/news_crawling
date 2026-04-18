@@ -3,7 +3,7 @@ NewsDesk 빌드 스크립트
 실행: python build.py
 
 1. React 프론트엔드 빌드 (npm run build)
-2. PyInstaller로 exe 생성 (launcher.py 기준)
+2. PyInstaller로 exe 생성 (server_entry.py 기준)
 """
 import subprocess
 import sys
