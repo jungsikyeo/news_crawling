@@ -9,6 +9,7 @@ HWP 바이너리 포맷은 복잡하므로, 보수적 접근:
 
 import logging
 import os
+import re
 import shutil
 import struct
 import zlib
@@ -114,6 +115,69 @@ def _decode_para_text(record_data: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 _WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
+
+# 헤더 날짜 패턴: "2026년 4월 16일", "2026 년 4 월 16 일 (수)" 등 허용
+_DATE_PATTERN = re.compile(r"\d{4}\s*년\s*\d{1,2}\s*월\s*\d{1,2}\s*일[^\n]*")
+
+
+def _format_header_date(date_str: str) -> str:
+    """헤더용 날짜 문자열 포맷: '2026년 4월 16일 (수)'"""
+    dt = datetime.strptime(date_str, "%Y-%m-%d")
+    weekday = _WEEKDAY_KR[dt.weekday()]
+    return f"{dt.year}년 {dt.month}월 {dt.day}일 ({weekday})"
+
+
+def _replace_date_in_header(header_elem, date_str: str, hp_ns: str) -> bool:
+    """헤더 paragraph(p0) 내부의 <hp:t> 텍스트 중 날짜 패턴을 실제 날짜로 교체.
+
+    템플릿 타이틀 박스 안에 박힌 샘플 날짜를 실행 시점 날짜로 바꾸기 위함.
+    """
+    new_date = _format_header_date(date_str)
+    replaced = False
+    for t in header_elem.iter(f"{{{hp_ns}}}t"):
+        if t.text and _DATE_PATTERN.search(t.text):
+            t.text = _DATE_PATTERN.sub(new_date, t.text)
+            replaced = True
+    return replaced
+
+
+def _find_dashed_border_fill_id(header_xml_str: str) -> str:
+    """header.xml에서 가장 많은 DASH 테두리를 가진 borderFill id를 찾는다.
+
+    템플릿에 따라 점선 borderFill의 id가 달라질 수 있으므로 동적으로 탐색.
+    4방(좌/우/상/하) 모두 DASH인 borderFill을 우선 선택.
+    """
+    import re as _re
+    best_id = None
+    best_count = 0
+    for m in _re.finditer(
+        r'<hh:borderFill id="(\d+)"[^>]*>(.*?)</hh:borderFill>',
+        header_xml_str,
+        _re.DOTALL,
+    ):
+        fid = m.group(1)
+        body = m.group(2)
+        dash_count = body.count('type="DASH"')
+        # 4방 모두 DASH인 것을 최우선
+        if dash_count >= 4:
+            return fid
+        if dash_count > best_count:
+            best_count = dash_count
+            best_id = fid
+    return best_id or "1"
+
+
+def _apply_page_border(header_elem, border_fill_id: str, hp_ns: str) -> int:
+    """p0 secPr 내부의 모든 <hp:pageBorderFill>의 borderFillIDRef를 교체.
+
+    원본 템플릿의 pageBorderFill은 id=1(NONE)을 가리켜 페이지 테두리가 없음.
+    점선 borderFill id로 바꿔 페이지 전체에 점선 테두리를 적용한다.
+    """
+    count = 0
+    for pbf in header_elem.iter(f"{{{hp_ns}}}pageBorderFill"):
+        pbf.set("borderFillIDRef", border_fill_id)
+        count += 1
+    return count
 
 
 def generate_text_report(
@@ -400,6 +464,24 @@ def generate_hwpx_from_template(
         section_path = pkg.section_paths()[0]
         section = pkg.get_xml(section_path)
 
+        # 1.1 점선 테두리 borderFill id 탐색 (header.xml에서)
+        try:
+            header_paths = pkg.header_paths() if hasattr(pkg, "header_paths") else []
+            header_xml_str = ""
+            if header_paths:
+                from xml.etree import ElementTree as ET
+                header_xml_str = ET.tostring(pkg.get_xml(header_paths[0]), encoding="unicode")
+            # fallback: raw zip read (python-hwpx가 header 접근 방식이 다를 수 있음)
+            if not header_xml_str:
+                import zipfile as _zip
+                with _zip.ZipFile(template_path) as _z:
+                    header_xml_str = _z.read("Contents/header.xml").decode("utf-8")
+            dashed_id = _find_dashed_border_fill_id(header_xml_str)
+            logger.info(f"점선 borderFill id 탐색 결과: {dashed_id}")
+        except Exception as e:
+            logger.warning(f"점선 borderFill id 탐색 실패, 기본값 '6' 사용: {e}")
+            dashed_id = "6"
+
         orig_paragraphs = section.findall(f"{{{hp_ns}}}p")
         if len(orig_paragraphs) < 26:
             logger.error(f"템플릿 paragraph 수가 부족합니다: {len(orig_paragraphs)}")
@@ -419,8 +501,17 @@ def generate_hwpx_from_template(
         for p in orig_paragraphs:
             section.remove(p)
 
-        # 4. 헤더 유지 (p0 + p1)
-        section.append(copy.deepcopy(tpl_header))
+        # 4. 헤더 유지 (p0 + p1) — 날짜 교체 + 페이지 점선 테두리 적용
+        header_copy = copy.deepcopy(tpl_header)
+        if _replace_date_in_header(header_copy, date_str, hp_ns):
+            logger.info(f"헤더 날짜 교체: {_format_header_date(date_str)}")
+        else:
+            logger.warning("헤더에서 날짜 패턴을 찾지 못했습니다 (템플릿 확인 필요)")
+        # 페이지 점선 테두리 적용 (pageBorderFill 참조를 dashed borderFill id로 교체)
+        pbf_count = _apply_page_border(header_copy, dashed_id, hp_ns)
+        if pbf_count > 0:
+            logger.info(f"페이지 점선 테두리 적용: pageBorderFill {pbf_count}개 → borderFillIDRef={dashed_id}")
+        section.append(header_copy)
         section.append(copy.deepcopy(tpl_blank_h))
 
         # 5. 보고서 텍스트를 paragraph로 변환

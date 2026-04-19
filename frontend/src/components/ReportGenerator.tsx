@@ -1,12 +1,18 @@
-import { useState, useEffect, useCallback } from "react"
-import { FileText, Download, Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { FileText, Download, Loader2, AlertCircle, RefreshCw, Eye, Trash2, X, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Modal } from "@/components/Modal"
+import type { ModalType } from "@/components/Modal"
+import { HwpViewer } from "@/components/HwpViewer"
 import {
   generateReport,
   fetchReportStatus,
   fetchReportList,
   downloadReport,
+  deleteReport,
+  fetchReportBlob,
+  uploadReport,
   type ReportStatus,
   type ReportFile,
 } from "@/hooks/useApi"
@@ -45,6 +51,18 @@ export default function ReportGenerator() {
   const [polling, setPolling] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [previewFile, setPreviewFile] = useState<{ name: string; blob: Blob } | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean
+    type: ModalType
+    title: string
+    message: string
+    onConfirm?: () => void
+  }>({ open: false, type: "info", title: "", message: "" })
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -115,11 +133,128 @@ export default function ReportGenerator() {
     }
   }
 
+  function handleDelete(filename: string) {
+    setConfirmModal({
+      open: true,
+      type: "confirm",
+      title: "보고서 삭제",
+      message: `'${filename}' 파일을 삭제하시겠습니까?\n삭제된 파일은 복구할 수 없습니다.`,
+      onConfirm: async () => {
+        setConfirmModal((m) => ({ ...m, open: false }))
+        setError(null)
+        try {
+          const res = await deleteReport(filename)
+          if (res.error) {
+            setError(res.error)
+            return
+          }
+          await loadReports()
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "삭제에 실패했습니다.")
+        }
+      },
+    })
+  }
+
+  async function handleUploadFiles(files: FileList | File[]) {
+    setError(null)
+    setSuccessMsg(null)
+    const arr = Array.from(files)
+    if (arr.length === 0) return
+
+    const allowed = arr.filter((f) => /\.(hwpx?)$/i.test(f.name))
+    const skipped = arr.filter((f) => !/\.(hwpx?)$/i.test(f.name))
+
+    // 모두 미지원 → 모달 안내
+    if (allowed.length === 0) {
+      const names = skipped.map((f) => f.name).join(", ")
+      setConfirmModal({
+        open: true,
+        type: "warning",
+        title: "지원하지 않는 파일 형식",
+        message: `한글 보고서 파일(.hwpx · .hwp)만 업로드할 수 있습니다.\n\n업로드되지 않은 파일:\n${names}`,
+      })
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
+    }
+
+    // 일부만 미지원 → 모달로 알리고 허용된 것만 업로드 진행
+    if (skipped.length > 0) {
+      const names = skipped.map((f) => f.name).join(", ")
+      setConfirmModal({
+        open: true,
+        type: "warning",
+        title: "일부 파일 제외",
+        message: `${skipped.length}개 파일은 .hwpx · .hwp가 아니어서 제외되었습니다.\n\n${names}`,
+      })
+    }
+
+    setUploading(true)
+    try {
+      const results = await Promise.all(allowed.map((f) => uploadReport(f)))
+      const names = results.map((r) => r.filename).filter(Boolean) as string[]
+      setSuccessMsg(`업로드 완료: ${names.join(", ")}`)
+      setTimeout(() => setSuccessMsg(null), 5000)
+      await loadReports()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "업로드 실패")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragOver(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      void handleUploadFiles(e.dataTransfer.files)
+    }
+  }
+
+  async function handlePreview(filename: string) {
+    setError(null)
+    setPreviewLoading(true)
+    try {
+      const blob = await fetchReportBlob(filename)
+      setPreviewFile({ name: filename, blob })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "미리보기 로드에 실패했습니다.")
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
   const isGenerating = status?.is_generating ?? false
   const cliAvailable = status?.cli_available ?? true
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div
+      className="flex flex-col gap-6 max-w-2xl relative"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types?.includes("Files")) {
+          e.preventDefault()
+          setDragOver(true)
+        }
+      }}
+      onDragLeave={(e) => {
+        // 자식 → 부모 이벤트 누수 방지
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setDragOver(false)
+      }}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay — 컨테이너 영역에 한정, 뒤 콘텐츠 blur로 분리 */}
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-40 rounded-xl bg-background/40 backdrop-blur-sm border-4 border-dashed border-primary flex items-center justify-center">
+          <div className="bg-background rounded-xl px-8 py-6 shadow-2xl flex flex-col items-center gap-3 border-2 border-primary">
+            <Upload className="h-10 w-10 text-primary" />
+            <span className="text-base font-bold text-foreground">여기에 파일을 놓으세요</span>
+            <span className="text-xs text-muted-foreground">.hwpx · .hwp</span>
+          </div>
+        </div>
+      )}
+
       {/* CLI unavailable warning */}
       {status && !cliAvailable && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
@@ -244,19 +379,49 @@ export default function ReportGenerator() {
             <FileText className="h-4 w-4 text-primary" />
             생성된 보고서
           </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={async () => {
-              setRefreshing(true)
-              await loadReports()
-              setTimeout(() => setRefreshing(false), 600)
-            }}
-            className="h-7 px-2"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 transition-transform ${refreshing ? "animate-spin" : ""}`} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".hwpx,.hwp"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void handleUploadFiles(e.target.files)
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="h-7 px-2"
+              title="파일 업로드"
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                setRefreshing(true)
+                await loadReports()
+                setTimeout(() => setRefreshing(false), 600)
+              }}
+              className="h-7 px-2"
+              title="새로고침"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 transition-transform ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          한컴오피스에서 수정한 .hwpx · .hwp 파일을 드래그하거나 업로드 버튼을 눌러 추가할 수 있습니다.
+        </p>
 
         {reports.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -279,19 +444,94 @@ export default function ReportGenerator() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDownload(report.filename)}
-                  className="flex-shrink-0 h-8 px-3"
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handlePreview(report.filename)}
+                    className="h-8 px-2"
+                    title="미리보기"
+                    disabled={previewLoading}
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDownload(report.filename)}
+                    className="h-8 px-2"
+                    title="다운로드"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(report.filename)}
+                    className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                    title="삭제"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Preview modal */}
+      {previewFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewFile(null)}
+        >
+          <div
+            className="bg-background rounded-xl border border-border max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-800 text-white">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-4 w-4 text-sky-400 flex-shrink-0" />
+                <span className="text-sm font-semibold truncate text-white">{previewFile.name}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDownload(previewFile.name)}
+                  className="h-8 px-2 text-white hover:bg-white/10 hover:text-white"
+                  title="다운로드"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPreviewFile(null)}
+                  className="h-8 px-2 text-white hover:bg-white/10 hover:text-white"
+                  title="닫기"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <HwpViewer blob={previewFile.blob} filename={previewFile.name} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm modal (삭제 등) */}
+      <Modal
+        open={confirmModal.open}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        onClose={() => setConfirmModal((m) => ({ ...m, open: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
     </div>
   )
 }

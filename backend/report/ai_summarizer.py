@@ -1,5 +1,12 @@
-"""AI 요약 모듈 — Claude CLI(claude -p) 파이프 모드를 사용한 뉴스 기사 분류 및 요약."""
+"""AI 요약 모듈 — Claude Agent SDK를 사용한 뉴스 기사 분류 및 요약.
 
+기존 `claude -p` subprocess 호출 방식 대신 `claude-agent-sdk` Python 바인딩을 사용한다.
+- 카테고리별 요약을 `asyncio.gather`로 병렬 실행 → 프로세스 spawn 오버헤드 제거
+- CLI 인증 자동 승계 (ANTHROPIC_API_KEY 불필요)
+- Claude Code 인증 세션을 그대로 사용
+"""
+
+import asyncio
 import json
 import logging
 import os
@@ -7,6 +14,14 @@ import re
 import shutil
 import subprocess
 from typing import Dict, List, Optional, Tuple
+
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    TextBlock,
+    query,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,52 +123,73 @@ def check_cli_available() -> Tuple[bool, str]:
         return False, f"Claude CLI 실행 중 오류: {e}"
 
 
-def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[str]:
-    """Claude CLI를 파이프 모드(-p)로 호출한다.
+async def _call_claude_async(prompt: str, input_data: str, timeout: int = 300) -> Optional[str]:
+    """Claude Agent SDK로 Claude를 호출한다.
 
     Args:
-        prompt: 시스템 프롬프트 (claude -p 인자)
-        input_data: stdin으로 전달할 데이터
+        prompt: 시스템 프롬프트 (모델 역할 지시)
+        input_data: 프롬프트에 이어 붙일 사용자 입력
         timeout: 최대 대기 시간(초)
 
     Returns:
         Claude 응답 텍스트, 실패 시 None
     """
-    path = _find_claude_path()
-    if not path:
-        logger.error("Claude CLI를 찾을 수 없습니다. PATH 및 일반 설치 경로 모두 검색 실패.")
-        return None
+    # 시스템 프롬프트와 사용자 입력을 하나로 합친다.
+    # 기존 subprocess 방식(`claude -p <prompt>` + stdin)과 동일한 의미.
+    full_prompt = f"{prompt}\n\n---\n\n{input_data}"
+
+    options = ClaudeAgentOptions(
+        max_turns=1,          # 단발성 요청 (Tool 사용 없음)
+        allowed_tools=[],     # 외부 도구 비활성화
+    )
+
+    logger.info(f"Agent SDK 호출: prompt_len={len(prompt)}, input_len={len(input_data)}")
 
     try:
-        env = _build_claude_env()
-        claude_dir = os.path.dirname(path)
-        if claude_dir not in env.get("PATH", ""):
-            env["PATH"] = claude_dir + os.pathsep + env.get("PATH", "")
+        async def _collect() -> Optional[str]:
+            output_parts: List[str] = []
+            result_text: Optional[str] = None
+            async for msg in query(prompt=full_prompt, options=options):
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            output_parts.append(block.text)
+                elif isinstance(msg, ResultMessage):
+                    # ResultMessage.result가 최종 응답
+                    if msg.result:
+                        result_text = msg.result
+            return result_text or ("".join(output_parts) if output_parts else None)
 
-        home_dir = env.get("HOME", os.path.expanduser("~"))
-        logger.info(f"Claude CLI 호출: path={path}, prompt_len={len(prompt)}, input_len={len(input_data)}, HOME={home_dir}")
-        result = subprocess.run(
-            [path, "-p", prompt],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            cwd=home_dir,  # 워킹 디렉토리 명시
-        )
-        if result.returncode != 0:
-            logger.error(f"Claude CLI 오류 (exit {result.returncode})")
-            logger.error(f"  stderr: {result.stderr.strip()[:1000]}")
-            logger.error(f"  stdout: {result.stdout.strip()[:500]}")
+        text = await asyncio.wait_for(_collect(), timeout=timeout)
+        if not text:
+            logger.error("Agent SDK 응답이 비어있음")
             return None
-        logger.info(f"Claude CLI 응답: {len(result.stdout)} chars")
-        return result.stdout.strip()
-    except subprocess.TimeoutExpired:
-        logger.error(f"Claude CLI 호출 타임아웃 ({timeout}초)")
+        logger.info(f"Agent SDK 응답: {len(text)} chars")
+        return text.strip()
+    except asyncio.TimeoutError:
+        logger.error(f"Agent SDK 호출 타임아웃 ({timeout}초)")
         return None
     except Exception as e:
-        logger.error(f"Claude CLI 호출 중 오류: {e}", exc_info=True)
+        logger.error(f"Agent SDK 호출 중 오류: {e}", exc_info=True)
         return None
+
+
+def _call_claude(prompt: str, input_data: str, timeout: int = 300) -> Optional[str]:
+    """동기 래퍼 — 내부적으로 async _call_claude_async를 실행한다.
+
+    기존 호출 지점의 동기 인터페이스를 유지하기 위한 호환 레이어.
+    """
+    try:
+        return asyncio.run(_call_claude_async(prompt, input_data, timeout))
+    except RuntimeError as e:
+        # 이미 실행 중인 이벤트 루프가 있는 경우 (FastAPI async context 등)
+        if "already running" in str(e).lower() or "cannot be called" in str(e).lower():
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_call_claude_async(prompt, input_data, timeout))
+            finally:
+                loop.close()
+        raise
 
 
 def _strip_code_block(text: str) -> str:
@@ -278,6 +314,94 @@ def summarize_category(category_name: str, articles: List[Dict]) -> Optional[str
 
     input_data = "\n\n---\n\n".join(article_texts)
     return _call_claude(prompt, input_data)
+
+
+async def summarize_category_async(category_name: str, articles: List[Dict]) -> Optional[str]:
+    """카테고리별 기사를 요약한다 (async 버전).
+
+    summarize_category와 동일하되 Agent SDK를 직접 호출하여
+    여러 카테고리를 asyncio.gather로 병렬 실행할 수 있게 한다.
+    """
+    if not articles:
+        logger.warning(f"요약할 기사가 없습니다: {category_name}")
+        return None
+
+    article_texts = []
+    for i, a in enumerate(articles):
+        title = a.get("title", "제목 없음")
+        publisher = a.get("publisher", "")
+        content = a.get("content", "")[:3000]
+        article_texts.append(
+            f"[기사 {i + 1}] {title} ({publisher})\n{content}"
+        )
+
+    prompt = (
+        f"당신은 한국 뉴스 브리핑 작성 전문가입니다. "
+        f"'{category_name}' 카테고리의 기사들을 아래 양식에 맞춰 요약하세요.\n\n"
+        f"양식:\n"
+        f"ㅇ (주요 내용) 핵심 사실과 수치를 간결하게 정리\n"
+        f"  - 세부 내용이 있으면 하위 항목으로\n"
+        f"ㅇ (평가) 해당 이슈의 의미와 영향을 1~2문장으로\n"
+        f"ㅇ (사설) 사설이나 칼럼이 포함된 경우 논조를 요약\n\n"
+        f"규칙:\n"
+        f"- 사실 기반으로만 작성하고 주관적 해석은 피하세요\n"
+        f"- 동일 주제 기사는 하나로 통합하세요\n"
+        f"- (사설) 항목은 사설/칼럼 기사가 있을 때만 포함하세요\n"
+        f"- 양식 기호(ㅇ, -)를 반드시 사용하세요\n"
+        f"- 마크다운(**, ##, ---, ```)을 절대 사용하지 마세요. 순수 텍스트와 양식 기호만 사용하세요"
+    )
+
+    input_data = "\n\n---\n\n".join(article_texts)
+    return await _call_claude_async(prompt, input_data)
+
+
+async def summarize_categories_parallel(
+    classification: Dict[str, List[Dict]],
+    on_progress: Optional[callable] = None,
+) -> Dict[str, str]:
+    """여러 카테고리를 병렬로 요약한다.
+
+    각 카테고리마다 별도 Agent SDK 세션을 띄워 asyncio.gather로 동시 실행한다.
+    기존 subprocess.Popen 방식 대비 프로세스 spawn 오버헤드가 없어 훨씬 빠르다.
+
+    Args:
+        classification: {카테고리명: 기사_리스트} 딕셔너리
+        on_progress: 각 카테고리 완료 시 호출되는 콜백
+                     (done_count, total_count, category_name, success) -> None
+
+    Returns:
+        {카테고리명: 요약텍스트} 딕셔너리 (실패한 카테고리는 제외됨)
+    """
+    if not classification:
+        return {}
+
+    total = len(classification)
+    results: Dict[str, str] = {}
+    done = 0
+    lock = asyncio.Lock()
+
+    async def _one(cat_name: str, arts: List[Dict]) -> Tuple[str, Optional[str]]:
+        nonlocal done
+        try:
+            summary = await summarize_category_async(cat_name, arts)
+        except Exception as e:
+            logger.error(f"카테고리 요약 중 예외 ({cat_name}): {e}", exc_info=True)
+            summary = None
+        async with lock:
+            done += 1
+            if on_progress:
+                try:
+                    on_progress(done, total, cat_name, bool(summary))
+                except Exception as e:
+                    logger.warning(f"on_progress 콜백 오류: {e}")
+        return cat_name, summary
+
+    tasks = [_one(name, arts) for name, arts in classification.items()]
+    pairs = await asyncio.gather(*tasks, return_exceptions=False)
+    for cat_name, summary in pairs:
+        if summary:
+            results[cat_name] = summary
+    return results
 
 
 def generate_full_summary(category_summaries: Dict[str, str], date_str: str) -> Optional[str]:

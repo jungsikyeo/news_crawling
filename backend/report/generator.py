@@ -16,6 +16,7 @@ from report.ai_summarizer import (
     check_cli_available,
     classify_articles,
     generate_full_summary,
+    summarize_categories_parallel,
     summarize_category,
 )
 from report.hwp_writer import (
@@ -95,12 +96,15 @@ class ReportGenerator:
         }
 
     def list_reports(self) -> List[Dict]:
-        """REPORTS_DIR 내 보고서 파일 목록을 최신순으로 반환한다."""
+        """REPORTS_DIR 내 한글 보고서 파일(.hwpx/.hwp)만 최신순으로 반환한다."""
         os.makedirs(REPORTS_DIR, exist_ok=True)
         reports: List[Dict] = []
         for fname in os.listdir(REPORTS_DIR):
             fpath = os.path.join(REPORTS_DIR, fname)
             if not os.path.isfile(fpath):
+                continue
+            # 한글 파일만 노출 (txt 폴백은 숨김)
+            if not fname.lower().endswith((".hwpx", ".hwp")):
                 continue
             stat = os.stat(fpath)
             reports.append(
@@ -185,30 +189,20 @@ class ReportGenerator:
             self.progress_detail = f"기사 분류 완료 ({len(categories)}개 카테고리)"
             logger.info(f"[보고서] 분류 완료: {categories}")
 
-            # --- Step 4: 카테고리별 요약 (병렬) ---
+            # --- Step 4: 카테고리별 요약 (Agent SDK 병렬) ---
             self.status = "ai_summarizing"
             self.progress_detail = f"{len(categories)}개 카테고리 병렬 요약 중... ({', '.join(categories)})"
-            logger.info(f"[보고서] Step 4: 카테고리 요약 (병렬 {len(categories)}개)")
+            logger.info(f"[보고서] Step 4: 카테고리 요약 (Agent SDK asyncio.gather {len(categories)}개)")
 
-            category_summaries: Dict[str, str] = {}
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+            def _on_progress(done_count: int, total: int, cat_name: str, success: bool) -> None:
+                mark = "✓" if success else "✗"
+                self.progress_detail = f"병렬 요약 완료 {done_count}/{total} — {cat_name} {mark}"
+                logger.info(f"[보고서] 카테고리 요약 완료: {cat_name} ({'성공' if success else '실패'})")
 
-            def _summarize(cat_name: str, cat_articles: List[Dict]) -> tuple:
-                return cat_name, summarize_category(cat_name, cat_articles)
-
-            with ThreadPoolExecutor(max_workers=min(len(categories), 5)) as executor:
-                futures = {
-                    executor.submit(_summarize, name, arts): name
-                    for name, arts in classification.items()
-                }
-                done_count = 0
-                for future in as_completed(futures):
-                    done_count += 1
-                    cat_name, summary = future.result()
-                    if summary:
-                        category_summaries[cat_name] = summary
-                    self.progress_detail = f"병렬 요약 완료 {done_count}/{len(categories)} — {cat_name} ✓"
-                    logger.info(f"[보고서] 카테고리 요약 완료: {cat_name}")
+            import asyncio
+            category_summaries: Dict[str, str] = asyncio.run(
+                summarize_categories_parallel(classification, on_progress=_on_progress)
+            )
 
             if not category_summaries:
                 raise RuntimeError("카테고리 요약을 하나도 생성하지 못했습니다.")

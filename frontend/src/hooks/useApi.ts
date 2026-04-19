@@ -224,3 +224,35 @@ export async function downloadReport(filename: string): Promise<void> {
   a.remove()
   URL.revokeObjectURL(url)
 }
+
+export async function deleteReport(filename: string) {
+  return apiFetch<{ status?: string; error?: string; filename: string }>(
+    `/api/report/delete/${encodeURIComponent(filename)}`,
+    { method: "DELETE" }
+  )
+}
+
+export function reportPreviewUrl(filename: string): string {
+  return `${BASE_URL}/api/report/preview/${encodeURIComponent(filename)}`
+}
+
+/** 미리보기용 Blob 가져오기 (rhwp 렌더러 입력용) */
+export async function fetchReportBlob(filename: string): Promise<Blob> {
+  const res = await fetch(reportPreviewUrl(filename))
+  if (!res.ok) throw new Error(`Preview failed: ${res.status}`)
+  return res.blob()
+}
+
+export async function uploadReport(file: File): Promise<{ status?: string; filename?: string; size?: number; detail?: string }> {
+  const form = new FormData()
+  form.append("file", file)
+  const res = await fetch(`${BASE_URL}/api/report/upload`, {
+    method: "POST",
+    body: form,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(data.detail ?? `업로드 실패 (${res.status})`)
+  }
+  return data
+}
